@@ -1,0 +1,8 @@
+# Any caller we have never met. Leaving a lead is safe (it only lands in the owner's inbox).
+# A call or a question the facts page can't answer becomes one yes/no question to the owner.
+peer: public
+owner: percy
+allow: [leave_lead]
+ask_owner: [request_call, ask_question]
+deny: []
+max_pending: 2

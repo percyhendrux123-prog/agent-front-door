@@ -1,0 +1,18 @@
+# One business's front door. Copy this file to run a door for any other business.
+business:
+  door_id: deployaxiom-front-door
+  name: Deploy Axiom
+  owner: percy                      # whose yes/no counts; goes on every owner answer receipt
+  founder: P. K. Stewart
+  email: percy@deployaxiom.com
+  booking_url: https://calendar.app.google/rD42RF3YVLaRV52J6
+  facts_url: https://deployaxiom.com/facts/
+  facts_file: ../data/axiom-facts.snapshot.html   # the human page itself; no second copy of the facts
+policies_dir: policies
+limits:
+  reads_per_minute: 60              # per caller agent
+  actions_per_hour: 5               # per caller agent and per person acted for
+  owner_questions_per_day: 10       # across all callers; then the door says try tomorrow
+  pending_ttl_hours: 72
+  decline_days: 90                  # how long a no is remembered
+  decline_similarity: 0.6

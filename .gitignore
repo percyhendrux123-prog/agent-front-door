@@ -1,0 +1,8 @@
+.venv/
+.state/
+__pycache__/
+*.pyc
+demo/state/
+demo/state-client/
+local-notes/
+.pytest_cache/

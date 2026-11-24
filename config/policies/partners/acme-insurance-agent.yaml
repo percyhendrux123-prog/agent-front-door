@@ -1,0 +1,9 @@
+# FICTIONAL partner for the demo and tests. A known agent with a shared key the owner issued.
+# Only the key's sha256 is stored here. Demo key: demo-partner-key-not-secret
+peer: acme-insurance-agent
+owner: percy
+key_sha256: 877eda9c102cb6b1f832f9ee355fbc6f702937137c8837f7cb0d59dfb3b6f29b
+allow: [leave_lead, request_call]
+ask_owner: [ask_question]
+deny: []
+max_pending: 3
