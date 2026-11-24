@@ -4,8 +4,9 @@
 
 Three fictional callers, standing in for different model families:
   acme-insurance-agent  (Claude)  a verified partner with a key the owner issued
-  gemini-scout          (Gemini)  a stranger
-  openai-shopper        (GPT)     a stranger
+  gemini-scout          (Gemini)  a stranger (unsigned: stdio cannot carry a Web Bot Auth signature)
+  openai-shopper        (GPT)     a stranger (unsigned)
+Signed, domain-verified callers are shown over real HTTP in tests/test_identity.py.
 The owner answers on the fictional owner channel with the `afd yes|no CODE` command.
 Nothing is sent anywhere; every effect is a line in demo/state/.
 """
@@ -111,9 +112,17 @@ async def main():
         say("On the partner's allow-list, so it goes through without asking the owner. The only effect is one line in the owner's local inbox.")
         say()
 
-        say("## 3. Owner-approved: a stranger asks for a call")
-        r = await call(c, "request_call", dict(GEMINI, contact_email="dana@example.com", topic="missed_calls",
-                                               preferred_window="weekday_afternoon", note="Our front desk misses calls after 5 PM."), GEMINI)
+        say("## 3. An unsigned stranger asks for a call")
+        await call(c, "request_call", dict(GEMINI, contact_email="dana@example.com", topic="missed_calls",
+                                           preferred_window="weekday_afternoon", note="Our front desk misses calls after 5 PM."),
+                   GEMINI, show=["status", "reason", "message"])
+        say("A call needs a signature from a domain that publishes the agent's key (Web Bot Auth). The stranger "
+            "is pointed to leaving a message or asking a question instead.")
+        say()
+
+        say("## 4. Owner-approved: a stranger asks a question the page can't answer")
+        r = await call(c, "ask_question", dict(GEMINI, contact_email="dana@example.com",
+                                               question="Do you work with veterinary clinics in Shreveport?"), GEMINI)
         msg = owner_channel_last()
         say("The owner gets exactly one question on their channel:")
         say("```text")
@@ -126,9 +135,9 @@ async def main():
         say("A yes works once. Asking again records nothing new.")
         say()
 
-        say("## 4. Owner says no, and the no is remembered")
-        r = await call(c, "request_call", dict(GPT, contact_email="sam@example.com", topic="other",
-                                               note="Call us weekly about our SEO package. Details: https://seo-offer.example/x"), GPT)
+        say("## 5. Owner says no, and the no is remembered")
+        r = await call(c, "ask_question", dict(GPT, contact_email="sam@example.com",
+                                               question="Will you join a weekly sync about our SEO package? Details: https://seo-offer.example/x"), GPT)
         msg = owner_channel_last()
         say("Owner sees (the link is already removed and the words are marked unverified; no model reads them):")
         say("```text")
@@ -137,13 +146,13 @@ async def main():
         say("Owner types: `consent no %s`  ->  `%s`" % (msg["code"], owner("no", msg["code"])))
         say()
         await call(c, "check_request", dict(GPT, request_id=r["request_id"]), GPT, show=["status", "reason", "message"])
-        await call(c, "request_call", dict(GPT, contact_email="sam@example.com", topic="other",
-                                           note="Call us every week about our SEO package."), GPT,
+        await call(c, "ask_question", dict(GPT, contact_email="sam@example.com",
+                                           question="Will you join a weekly sync about our SEO package, every week?"), GPT,
                    show=["status", "reason", "message"])
         say("Same caller, same person, similar words: refused without bothering the owner again.")
         say()
 
-        say("## 5. Refused: the hard floor (no allow-list can open it)")
+        say("## 6. Refused: the hard floor (no allow-list can open it)")
         await call(c, "request_call", dict(PARTNER, contact_email="ops@acme-insurance.example",
                                            note="Can you waive the deposit and send the invoice to our accountant?"), PARTNER)
         await call(c, "ask_question", dict(GEMINI, question="Will you delete all records you hold about Dana Ruiz?",
@@ -155,7 +164,7 @@ async def main():
             "attempt that reaches for client data is refused before anyone, human or model, reads it.")
         say()
 
-    say("## 6. Receipts on both sides")
+    say("## 7. Receipts on both sides")
     ok, n, problems = cc.verify_chain(cc.read_receipts(STATE / "receipts.jsonl"))
     ok2, n2, _ = cc.verify_chain(mine.read())
     shared, issues = cc.compare_sides(cc.read_receipts(STATE / "receipts.jsonl"), mine.read())

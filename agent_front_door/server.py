@@ -10,10 +10,12 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Literal
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 
+from . import identity as idm
 from .door import FrontDoor, Refused
+from .http_identity import IdentityMiddleware, identity_from_ctx
 
 ROOT = Path(__file__).resolve().parent.parent
 Topic = Literal["client_care", "missed_calls", "follow_up", "records", "front_door_for_my_business", "other"]
@@ -27,7 +29,11 @@ on the allowed list it goes through; otherwise the owner gets one yes/no questio
 check_request later; a no is remembered. Always refused, whatever you are allowed: prices, payments,
 refunds, deleting data, sending messages to anyone else, and commitments in the owner's name.
 Notes are capped at 280 characters, links are removed, and they are read by the owner, not by a model.
-Every answer carries a receipt (seq, hash, prev) from the door's hash-chained log; keep it."""
+Every answer carries a receipt (seq, hash, prev) from the door's hash-chained log; keep it.
+Identity: over HTTP you may sign requests with Web Bot Auth (RFC 9421 HTTP Message Signatures, Ed25519,
+keys at https://<your-domain>/.well-known/http-message-signatures-directory). Unsigned callers can read
+and leave a message. A request call needs a signature from a domain that publishes your key: the door
+then records "verified: <domain>". Names typed into tool arguments are always treated as self-reported."""
 
 
 def build(config: Path | None = None, state_dir: Path | None = None) -> tuple[MCPServer, FrontDoor]:
@@ -62,19 +68,27 @@ def build(config: Path | None = None, state_dir: Path | None = None) -> tuple[MC
             return {"status": "refused", "message": "read limit reached; try in a minute"}
         return door.lookup(question)
 
-    @mcp.tool(annotations=act, description="Ask for a call with the business on behalf of a person. Goes through the owner's consent rules.")
-    def request_call(caller_agent: str, caller_model: str, acting_for: str, contact_email: str,
+    @mcp.tool(annotations=read, description="How this door sees you: unsigned (self-reported), signed, or verified for a domain.")
+    def who_am_i(ctx: Context) -> Dict[str, Any]:
+        ident = identity_from_ctx(ctx) or idm.unsigned("no_http_signature")
+        return {"identity": ident.level, "label": ident.label, "reason": ident.reason,
+                "verified_domain": ident.domain or None, "what_it_allows": idm.LEVEL_MEANING[ident.level],
+                "card": ident.card or None}
+
+    @mcp.tool(annotations=act, description="Ask for a call with the business on behalf of a person. Goes through the owner's consent rules. Needs a domain-verified signature.")
+    def request_call(ctx: Context, caller_agent: str, caller_model: str, acting_for: str, contact_email: str,
                      topic: Topic = "other", preferred_window: Window = "any", note: str = "",
                      caller_key: str = "") -> Dict[str, Any]:
-        return guard(lambda: door.act("request_call", door.caller(caller_agent, caller_model, acting_for, caller_key),
+        return guard(lambda: door.act("request_call", door.caller(caller_agent, caller_model, acting_for, caller_key,
+                                                                  identity_from_ctx(ctx)),
                                       {"contact_email": contact_email, "topic": topic,
                                        "preferred_window": preferred_window, "note": note}))
 
     @mcp.tool(annotations=act, description="Ask the business a question. Answered from the facts page when it can be; otherwise put to the owner under the consent rules.")
-    def ask_question(caller_agent: str, caller_model: str, acting_for: str, question: str, contact_email: str,
-                     caller_key: str = "") -> Dict[str, Any]:
+    def ask_question(ctx: Context, caller_agent: str, caller_model: str, acting_for: str, question: str,
+                     contact_email: str, caller_key: str = "") -> Dict[str, Any]:
         def run():
-            c = door.caller(caller_agent, caller_model, acting_for, caller_key)
+            c = door.caller(caller_agent, caller_model, acting_for, caller_key, identity_from_ctx(ctx))
             hit = door.lookup(question)
             if hit.get("found") and hit["match_score"] >= 0.75:
                 return dict(hit, status="answered_from_page")
@@ -82,18 +96,35 @@ def build(config: Path | None = None, state_dir: Path | None = None) -> tuple[MC
         return guard(run)
 
     @mcp.tool(annotations=act, description="Leave a short lead for the business: who, how to reach them, what they need.")
-    def leave_lead(caller_agent: str, caller_model: str, acting_for: str, contact_email: str,
+    def leave_lead(ctx: Context, caller_agent: str, caller_model: str, acting_for: str, contact_email: str,
                    topic: Topic = "other", note: str = "", caller_key: str = "") -> Dict[str, Any]:
-        return guard(lambda: door.act("leave_lead", door.caller(caller_agent, caller_model, acting_for, caller_key),
+        return guard(lambda: door.act("leave_lead", door.caller(caller_agent, caller_model, acting_for, caller_key,
+                                                                identity_from_ctx(ctx)),
                                       {"contact_email": contact_email, "topic": topic, "note": note}))
 
     @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=True, open_world_hint=False),
               description="Check a request that was waiting on the owner. If the owner said yes, this completes it.")
-    def check_request(request_id: str, caller_agent: str, caller_model: str, acting_for: str,
+    def check_request(ctx: Context, request_id: str, caller_agent: str, caller_model: str, acting_for: str,
                       caller_key: str = "") -> Dict[str, Any]:
-        return guard(lambda: door.check(request_id, door.caller(caller_agent, caller_model, acting_for, caller_key)))
+        return guard(lambda: door.check(request_id, door.caller(caller_agent, caller_model, acting_for, caller_key,
+                                                                 identity_from_ctx(ctx))))
 
     return mcp, door
+
+
+def build_http_app(config: Path | None = None, state_dir: Path | None = None, *, fetch=None, clock=None,
+                   authority: str | None = None):
+    """The streamable-HTTP MCP app wrapped in the signature check. Returns (asgi_app, door, verifier)."""
+    mcp, door = build(config, state_dir)
+    ident = door.cfg.get("identity") or {}
+    verifier = idm.Verifier(authority or str(ident.get("authority") or "127.0.0.1:8765"),
+                            fetch=fetch or idm.default_fetch, clock=clock or door.clock,
+                            max_lifetime=int(ident.get("max_signature_lifetime_s", 300)),
+                            cache_ttl=int(ident.get("key_cache_s", 300)),
+                            revoked_keyids=ident.get("revoked_keyids") or (),
+                            revoked_agents=ident.get("revoked_agents") or ())
+    app = mcp.streamable_http_app(json_response=True, stateless_http=True)
+    return IdentityMiddleware(app, verifier, directory=door.door_directory), door, verifier
 
 
 def main() -> None:
@@ -103,7 +134,9 @@ def main() -> None:
     args = ap.parse_args()
     mcp, _ = build()
     if args.http:
-        mcp.run("streamable-http", host="127.0.0.1", port=args.port)
+        import uvicorn
+        app, _, _ = build_http_app(authority="127.0.0.1:%d" % args.port)
+        uvicorn.run(app, host="127.0.0.1", port=args.port)
     else:
         mcp.run()
 

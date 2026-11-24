@@ -1,0 +1,314 @@
+{
+ "door": "door.axiom-test.example",
+ "now": 1795540000,
+ "directories": {
+  "https://carol-agent.example/.well-known/http-message-signatures-directory": {
+   "keys": [
+    {
+     "kty": "OKP",
+     "crv": "Ed25519",
+     "x": "IidZK9hnrFMQpS2QVpjErlZJsrzk65VbtuDjbm4OncU",
+     "kid": "LcQLJghEy1EQT5WFZ8qjd_l91Pnun2ox-8DmHL-1MVs",
+     "use": "sig",
+     "alg": "ed25519"
+    }
+   ],
+   "agent_card": {
+    "client_name": "Carol's assistant",
+    "acts_for": "Carol Diaz (fictional)"
+   }
+  },
+  "https://keys.signer.example/agents/carol.json": {
+   "keys": [
+    {
+     "kty": "OKP",
+     "crv": "Ed25519",
+     "x": "aGYOrS_CGeefTgwOmGRgiKZd7e3xrgZ1EnxYA-bzFVg",
+     "kid": "7wl5CXQ838_CwvVPWQ3k-PxN7AZOckCjEgtIfwjsIS4",
+     "use": "sig",
+     "alg": "ed25519"
+    }
+   ]
+  },
+  "https://unsigned-file.example/.well-known/http-message-signatures-directory": {
+   "keys": [
+    {
+     "kty": "OKP",
+     "crv": "Ed25519",
+     "x": "IidZK9hnrFMQpS2QVpjErlZJsrzk65VbtuDjbm4OncU",
+     "kid": "LcQLJghEy1EQT5WFZ8qjd_l91Pnun2ox-8DmHL-1MVs",
+     "use": "sig",
+     "alg": "ed25519"
+    }
+   ]
+  }
+ },
+ "directory_headers": {
+  "https://carol-agent.example/.well-known/http-message-signatures-directory": {
+   "signature-input": "sig1=(\"@authority\";req);alg=\"ed25519\";keyid=\"LcQLJghEy1EQT5WFZ8qjd_l91Pnun2ox-8DmHL-1MVs\";created=1795539990;expires=1798131990;tag=\"http-message-signatures-directory\"",
+   "signature": "sig1=:9XmqbASam2z99ufcUxYSIY9vEcfZfrHMuR8P3hqAhYIumq2CdlxDiaC3ohezcstcofVwSErtF06meC/FRWfsBA==:"
+  },
+  "https://keys.signer.example/agents/carol.json": {
+   "signature-input": "sig1=(\"@authority\";req);alg=\"ed25519\";keyid=\"7wl5CXQ838_CwvVPWQ3k-PxN7AZOckCjEgtIfwjsIS4\";created=1795539990;expires=1798131990;tag=\"http-message-signatures-directory\"",
+   "signature": "sig1=:KnQZbVxNwKGsgSvNwKVCZ/6v2Qzq+jeKqycrMzkdTT5FxkLsjktY1DvqxzDfWrhxSpkGze01B93FwgRJyzUIAw==:"
+  },
+  "https://unsigned-file.example/.well-known/http-message-signatures-directory": {}
+ },
+ "cases": [
+  {
+   "name": "verified",
+   "path": "/mcp",
+   "headers": {
+    "content-type": "application/json",
+    "Signature-Agent": "sig1=\"https://carol-agent.example/.well-known/http-message-signatures-directory\"",
+    "Content-Digest": "sha-256=:dCO16CaffRvmsTIUy3rEFOSvqVzp1L8FkPoOafaXiXY=:",
+    "Signature-Input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1795540000;expires=1795540060;keyid=\"LcQLJghEy1EQT5WFZ8qjd_l91Pnun2ox-8DmHL-1MVs\";alg=\"ed25519\";nonce=\"PHsL_pjDaPdzbrZ-xR82pBh1oRCpLK_B3v_dLM5s3Fc\";tag=\"web-bot-auth\"",
+    "Signature": "sig1=:ylkSAeI8pi8gE7nHx3mlZAM6x1BbhJEnS5X24E1Ejr61K9R2kRuWWKtKj/uq1H24VpdC1Ij5EyikSKiLN6OiBw==:"
+   },
+   "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\"}",
+   "level": "domain_verified",
+   "reason": "ok",
+   "rejected": false,
+   "domain": "carol-agent.example",
+   "label": "verified: carol-agent.example"
+  },
+  {
+   "name": "verified_with_query",
+   "path": "/mcp?x=1",
+   "headers": {
+    "content-type": "application/json",
+    "Signature-Agent": "sig1=\"https://carol-agent.example/.well-known/http-message-signatures-directory\"",
+    "Content-Digest": "sha-256=:dCO16CaffRvmsTIUy3rEFOSvqVzp1L8FkPoOafaXiXY=:",
+    "Signature-Input": "sig1=(\"@method\" \"@authority\" \"@path\" \"@query\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1795540000;expires=1795540060;keyid=\"LcQLJghEy1EQT5WFZ8qjd_l91Pnun2ox-8DmHL-1MVs\";alg=\"ed25519\";nonce=\"wdV1HzfQR9flwWssW02Tzjpy7ITiSmNMN-AN9yKO1-s\";tag=\"web-bot-auth\"",
+    "Signature": "sig1=:INFK9Db5LBdkcSoE3rv/mtXDgWVtNrG65jVp3FDmhdBrsaJ/C9wCee8GyZObWUlOZAHFuY6l4It4xaEGIttHDA==:"
+   },
+   "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\"}",
+   "level": "domain_verified",
+   "reason": "ok",
+   "rejected": false,
+   "domain": "carol-agent.example",
+   "label": "verified: carol-agent.example"
+  },
+  {
+   "name": "signed_no_domain",
+   "path": "/mcp",
+   "headers": {
+    "content-type": "application/json",
+    "Signature-Agent": "sig1=\"https://keys.signer.example/agents/carol.json\"",
+    "Content-Digest": "sha-256=:dCO16CaffRvmsTIUy3rEFOSvqVzp1L8FkPoOafaXiXY=:",
+    "Signature-Input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1795540000;expires=1795540060;keyid=\"7wl5CXQ838_CwvVPWQ3k-PxN7AZOckCjEgtIfwjsIS4\";alg=\"ed25519\";nonce=\"wrOQb_yAOIZSRUZ4Tve3ZamtbHeKOlh5G-gZmcm5KPg\";tag=\"web-bot-auth\"",
+    "Signature": "sig1=:GWBN5cIX8dbDYouBYez5ocvxQQZ2v+BIuQ+SiGBNv44HU1cMvwSbRSXynMYEqbfRWGrc/Lx6WD/dWHblBW2ZBA==:"
+   },
+   "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\"}",
+   "level": "signed",
+   "reason": "ok",
+   "rejected": false,
+   "domain": "",
+   "label": "signed, no domain: https://keys.signer.example/agents/carol.json"
+  },
+  {
+   "name": "forged_key_claims_carol",
+   "path": "/mcp",
+   "headers": {
+    "content-type": "application/json",
+    "Signature-Agent": "sig1=\"https://carol-agent.example/.well-known/http-message-signatures-directory\"",
+    "Content-Digest": "sha-256=:dCO16CaffRvmsTIUy3rEFOSvqVzp1L8FkPoOafaXiXY=:",
+    "Signature-Input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1795540000;expires=1795540060;keyid=\"YibiaLN7p16TVTUzrMmD0CwjRnRc6vAXrMmD8Vdd3JY\";alg=\"ed25519\";nonce=\"7J_1lzTBst-WYqonxqg74YrAtXdXMvcXgCCIff1eTCg\";tag=\"web-bot-auth\"",
+    "Signature": "sig1=:79r02MpnqvskyJUoDi1/9AvV6dO4dryBCk5fzioLaZt/Ne0Bs9gPi0j3p7tOV0evbAj9BFgoH7/CA5zwlR+IBA==:"
+   },
+   "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\"}",
+   "level": "unsigned",
+   "reason": "key_not_published_by_claimed_owner",
+   "rejected": true,
+   "domain": "",
+   "label": "self reported"
+  },
+  {
+   "name": "body_swapped",
+   "path": "/mcp",
+   "headers": {
+    "content-type": "application/json",
+    "Signature-Agent": "sig1=\"https://carol-agent.example/.well-known/http-message-signatures-directory\"",
+    "Content-Digest": "sha-256=:dCO16CaffRvmsTIUy3rEFOSvqVzp1L8FkPoOafaXiXY=:",
+    "Signature-Input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1795540000;expires=1795540060;keyid=\"LcQLJghEy1EQT5WFZ8qjd_l91Pnun2ox-8DmHL-1MVs\";alg=\"ed25519\";nonce=\"x8Uk5UxpEa7zQ1CKeq-NKRmCvxdrBkP7cwAxDzPyJTU\";tag=\"web-bot-auth\"",
+    "Signature": "sig1=:EoHOV5IYtgZWer0Q/Fb4kbE9KWGbSSNBPLycSfYCfo0nSPQEFHUlV/rqO6j2WVHu3qcZ5VV8ie6hGvPLF5agBw==:"
+   },
+   "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}",
+   "level": "unsigned",
+   "reason": "body_digest_mismatch",
+   "rejected": true,
+   "domain": "",
+   "label": "self reported"
+  },
+  {
+   "name": "path_swapped",
+   "path": "/owner/pull",
+   "headers": {
+    "content-type": "application/json",
+    "Signature-Agent": "sig1=\"https://carol-agent.example/.well-known/http-message-signatures-directory\"",
+    "Content-Digest": "sha-256=:dCO16CaffRvmsTIUy3rEFOSvqVzp1L8FkPoOafaXiXY=:",
+    "Signature-Input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1795540000;expires=1795540060;keyid=\"LcQLJghEy1EQT5WFZ8qjd_l91Pnun2ox-8DmHL-1MVs\";alg=\"ed25519\";nonce=\"yPdK2ooLB5q3DpJiw9e5wlnJI2ypM3sxzq_zT3NgUPA\";tag=\"web-bot-auth\"",
+    "Signature": "sig1=:PjM/UMAA+akTOsn1JSEpYLtkHktZ55x3wmPI7cza2wqLpKb3cOHq2LAzWVAn0ZBdBpi8l8ftIFCtaSjsQ3LDBw==:"
+   },
+   "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\"}",
+   "level": "unsigned",
+   "reason": "bad_signature",
+   "rejected": true,
+   "domain": "",
+   "label": "self reported"
+  },
+  {
+   "name": "expired",
+   "path": "/mcp",
+   "headers": {
+    "content-type": "application/json",
+    "Signature-Agent": "sig1=\"https://carol-agent.example/.well-known/http-message-signatures-directory\"",
+    "Content-Digest": "sha-256=:dCO16CaffRvmsTIUy3rEFOSvqVzp1L8FkPoOafaXiXY=:",
+    "Signature-Input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1795539600;expires=1795539660;keyid=\"LcQLJghEy1EQT5WFZ8qjd_l91Pnun2ox-8DmHL-1MVs\";alg=\"ed25519\";nonce=\"OWb7lzWjmsfVAEj2DcHHUYryr0-Utbnqx2RFLYn_34s\";tag=\"web-bot-auth\"",
+    "Signature": "sig1=:4Tj3unpjC5xiP7q2Od/gS7oH1+Dzyt3ePKIZHzQuqiWj2oEVjpaJjoDsxNicWWAMH1amxAUknAEJbQZwqdmkBQ==:"
+   },
+   "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\"}",
+   "level": "unsigned",
+   "reason": "expired",
+   "rejected": true,
+   "domain": "",
+   "label": "self reported"
+  },
+  {
+   "name": "lifetime_too_long",
+   "path": "/mcp",
+   "headers": {
+    "content-type": "application/json",
+    "Signature-Agent": "sig1=\"https://carol-agent.example/.well-known/http-message-signatures-directory\"",
+    "Content-Digest": "sha-256=:dCO16CaffRvmsTIUy3rEFOSvqVzp1L8FkPoOafaXiXY=:",
+    "Signature-Input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1795540000;expires=1795543600;keyid=\"LcQLJghEy1EQT5WFZ8qjd_l91Pnun2ox-8DmHL-1MVs\";alg=\"ed25519\";nonce=\"GcyqRAkYWO3OxbjduecKkTgYUdET2r1v4lFWbeix3TQ\";tag=\"web-bot-auth\"",
+    "Signature": "sig1=:ZPNsIU7qLL4CEY9UqImKJMKpkHStGatp7nkNMuKk4BazIG3VQ5lLFpuwGXUUWHjW3wddIXoLaak7dcCJvGxVCA==:"
+   },
+   "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\"}",
+   "level": "unsigned",
+   "reason": "lifetime_too_long",
+   "rejected": true,
+   "domain": "",
+   "label": "self reported"
+  },
+  {
+   "name": "created_in_future",
+   "path": "/mcp",
+   "headers": {
+    "content-type": "application/json",
+    "Signature-Agent": "sig1=\"https://carol-agent.example/.well-known/http-message-signatures-directory\"",
+    "Content-Digest": "sha-256=:dCO16CaffRvmsTIUy3rEFOSvqVzp1L8FkPoOafaXiXY=:",
+    "Signature-Input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1795540300;expires=1795540360;keyid=\"LcQLJghEy1EQT5WFZ8qjd_l91Pnun2ox-8DmHL-1MVs\";alg=\"ed25519\";nonce=\"q9RAx4BjyTijcJqAR5MdcgkRGOODcNv4YkLIEp8Q7Tc\";tag=\"web-bot-auth\"",
+    "Signature": "sig1=:lDBHi09Z02jDF24swQcJkHumOWGBcX8+raDA5lwEIVtd85QHjFlfyuSNAwd3x8qLzdqs2sc2mXCnQCgpatyjAA==:"
+   },
+   "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\"}",
+   "level": "unsigned",
+   "reason": "created_in_future",
+   "rejected": true,
+   "domain": "",
+   "label": "self reported"
+  },
+  {
+   "name": "short_nonce",
+   "path": "/mcp",
+   "headers": {
+    "content-type": "application/json",
+    "Signature-Agent": "sig1=\"https://carol-agent.example/.well-known/http-message-signatures-directory\"",
+    "Content-Digest": "sha-256=:dCO16CaffRvmsTIUy3rEFOSvqVzp1L8FkPoOafaXiXY=:",
+    "Signature-Input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1795540000;expires=1795540060;keyid=\"LcQLJghEy1EQT5WFZ8qjd_l91Pnun2ox-8DmHL-1MVs\";alg=\"ed25519\";nonce=\"abc\";tag=\"web-bot-auth\"",
+    "Signature": "sig1=:/QfX5xQaoTQMUJg9ZUVFqRIlv6a3z14aWod9iAzG/SaWAbo9lujHNKpuw/5hP6VHiUvVycD9VNjpCRBXwhrhCQ==:"
+   },
+   "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\"}",
+   "level": "unsigned",
+   "reason": "nonce_required",
+   "rejected": true,
+   "domain": "",
+   "label": "self reported"
+  },
+  {
+   "name": "http_agent_url",
+   "path": "/mcp",
+   "headers": {
+    "content-type": "application/json",
+    "Signature-Agent": "sig1=\"http://carol-agent.example/.well-known/http-message-signatures-directory\"",
+    "Content-Digest": "sha-256=:dCO16CaffRvmsTIUy3rEFOSvqVzp1L8FkPoOafaXiXY=:",
+    "Signature-Input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1795540000;expires=1795540060;keyid=\"LcQLJghEy1EQT5WFZ8qjd_l91Pnun2ox-8DmHL-1MVs\";alg=\"ed25519\";nonce=\"FipMd4XyhLmha7qzJk_FEVoxggffbFDn7f81C7kmnIk\";tag=\"web-bot-auth\"",
+    "Signature": "sig1=:beZbBssmjge/Wab38l7rbg83ybjO5kHu4wvFeB3/HHCkfhmvg3OuoR2wqys/9OgttR/Guq2GKIiyv3O9+GqHAQ==:"
+   },
+   "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\"}",
+   "level": "unsigned",
+   "reason": "signature_agent_url_refused",
+   "rejected": true,
+   "domain": "",
+   "label": "self reported"
+  },
+  {
+   "name": "ip_agent_url",
+   "path": "/mcp",
+   "headers": {
+    "content-type": "application/json",
+    "Signature-Agent": "sig1=\"https://10.0.0.1/.well-known/http-message-signatures-directory\"",
+    "Content-Digest": "sha-256=:dCO16CaffRvmsTIUy3rEFOSvqVzp1L8FkPoOafaXiXY=:",
+    "Signature-Input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1795540000;expires=1795540060;keyid=\"LcQLJghEy1EQT5WFZ8qjd_l91Pnun2ox-8DmHL-1MVs\";alg=\"ed25519\";nonce=\"On59TmbtXGysG3H1dsHvaC_17SHn1km0YvFFw_e6Q1o\";tag=\"web-bot-auth\"",
+    "Signature": "sig1=:1b5hyDGiNBTG6P3w/gwI8f8vf4TYZc/Q7fh1ykdPNlGH7+mXgnCiU57/MfDe1MCnyiyVaHpf7BD8BmD/B1VVCA==:"
+   },
+   "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\"}",
+   "level": "unsigned",
+   "reason": "signature_agent_url_refused",
+   "rejected": true,
+   "domain": "",
+   "label": "self reported"
+  },
+  {
+   "name": "unreachable_directory",
+   "path": "/mcp",
+   "headers": {
+    "content-type": "application/json",
+    "Signature-Agent": "sig1=\"https://nobody-home.example/.well-known/http-message-signatures-directory\"",
+    "Content-Digest": "sha-256=:dCO16CaffRvmsTIUy3rEFOSvqVzp1L8FkPoOafaXiXY=:",
+    "Signature-Input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1795540000;expires=1795540060;keyid=\"LcQLJghEy1EQT5WFZ8qjd_l91Pnun2ox-8DmHL-1MVs\";alg=\"ed25519\";nonce=\"yra7G2LfzHfpJZtAn1_xnVEIisk3sYu8hYCFDDLWDBA\";tag=\"web-bot-auth\"",
+    "Signature": "sig1=:9zkDR4oVUKlkaO6Yi2fKVbxXMK1cMDYMubMkfohlsft63bBd+O9jTTeija+ktRLHGTnS8qoqXNlgNYNdnk03Dw==:"
+   },
+   "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\"}",
+   "level": "unsigned",
+   "reason": "directory_unreachable",
+   "rejected": false,
+   "domain": "",
+   "label": "self reported"
+  },
+  {
+   "name": "directory_response_unsigned",
+   "path": "/mcp",
+   "headers": {
+    "content-type": "application/json",
+    "Signature-Agent": "sig1=\"https://unsigned-file.example/.well-known/http-message-signatures-directory\"",
+    "Content-Digest": "sha-256=:dCO16CaffRvmsTIUy3rEFOSvqVzp1L8FkPoOafaXiXY=:",
+    "Signature-Input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1795540000;expires=1795540060;keyid=\"LcQLJghEy1EQT5WFZ8qjd_l91Pnun2ox-8DmHL-1MVs\";alg=\"ed25519\";nonce=\"xynkgtnh9LufBozDjj19RhxB5LkpFexbSKuzodabLUM\";tag=\"web-bot-auth\"",
+    "Signature": "sig1=:Non9aVOEKFz2b++jO4JNgbnCr1HVu/zae0iaTnenR/ruzw7ZG2LCbVAcp8mAfJNfdmdt0GgNaJYMlgZK1cI7AQ==:"
+   },
+   "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\"}",
+   "level": "unsigned",
+   "reason": "key_not_published_by_claimed_owner",
+   "rejected": true,
+   "domain": "",
+   "label": "self reported"
+  },
+  {
+   "name": "no_tag",
+   "path": "/mcp",
+   "headers": {
+    "content-type": "application/json",
+    "Signature-Agent": "sig1=\"https://carol-agent.example/.well-known/http-message-signatures-directory\"",
+    "Content-Digest": "sha-256=:dCO16CaffRvmsTIUy3rEFOSvqVzp1L8FkPoOafaXiXY=:",
+    "Signature-Input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1795540000;expires=1795540060;keyid=\"LcQLJghEy1EQT5WFZ8qjd_l91Pnun2ox-8DmHL-1MVs\";alg=\"ed25519\";nonce=\"wVh4EOE3vDTUbR5j4vkS3_ngVGenj8Lz8-7yTUOFuq0\"",
+    "Signature": "sig1=:KRDJPuLD9FEiltLhkZoq/0KmzzVKIdw8q+k+fpwyH/l8PczKS6Iyp8B0/Heih3OIy4Uz1/GlC7QPwHNSLbk8Bw==:"
+   },
+   "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\"}",
+   "level": "unsigned",
+   "reason": "no_web_bot_auth_signature",
+   "rejected": true,
+   "domain": "",
+   "label": "self reported"
+  }
+ ]
+}

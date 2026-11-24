@@ -15,6 +15,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import yaml
 
 from . import consent_core as cc
+from . import identity as idm
 from .facts import Facts
 
 # The front door's hard floor: the consent network's floor plus commitments in the owner's name and
@@ -136,24 +137,85 @@ class FrontDoor:
         self.daily = cc.JsonState(self.state_dir / "daily.json")
         self.limits = self.cfg.get("limits", {})
         self.rate = RateLimiter(clock)
+        ident = self.cfg.get("identity") or {}
+        self.min_trust: Dict[str, str] = dict(ident.get("min_trust") or {})
+        self.door_key: Optional[idm.AgentKey] = None
+        self.door_key_url = str(ident.get("door_key_url") or "")
+        if ident.get("sign_receipts"):
+            kpath = self.state_dir / "door_ed25519.key"   # git-ignored state; never in the repo
+            if not kpath.exists():
+                idm.AgentKey.generate().to_file(kpath)
+            self.door_key = idm.AgentKey.from_file(kpath)
+
+    def door_directory(self) -> Dict[str, Any]:
+        """The door's own key directory (what it would publish so callers can check its receipts)."""
+        if not self.door_key:
+            return {"keys": []}
+        return idm.directory([self.door_key], card={"client_name": "%s front door" % self.business["name"],
+                                                    "contacts": ["mailto:" + self.business["email"]]})
 
     # -- identity and policy ---------------------------------------------------------------
-    def caller(self, caller_agent: Any, caller_model: Any, acting_for: Any, caller_key: Any = "") -> Dict[str, str]:
+    def caller(self, caller_agent: Any, caller_model: Any, acting_for: Any, caller_key: Any = "",
+               identity: Optional[idm.Identity] = None) -> Dict[str, str]:
+        """Who is knocking. Names are self-reported; ``identity`` comes only from the HTTP layer's
+        signature check (never from tool arguments), so a caller cannot claim a domain by typing it."""
         c = {"caller_agent": label(caller_agent, "caller_agent"),
              "caller_model": label(caller_model, "caller_model"),
              "acting_for": label(acting_for, "acting_for"),
              "identity": "self_reported", "policy": "public"}
+        ident = identity or idm.unsigned("no_http_signature")
+        # The principal is what rate caps, open questions and remembered no's attach to. A verified
+        # domain cannot shed a no by renaming its agent; a self-reported name can only rename itself.
+        c["principal"] = c["caller_agent"]
+        c["identity_label"] = ident.label
+        for k, v in ident.receipt_fields().items():
+            if k in ("verified_domain", "signature_agent", "keyid", "request_sig_sha256"):
+                c[k] = v
+        if ident.level == idm.SIGNED:
+            c["identity"], c["principal"] = "signed_no_domain", "key:" + ident.keyid
+        elif ident.level in (idm.DOMAIN_VERIFIED, idm.PARTNER):
+            # Partner status is the door owner's list, checked here, not anything the caller sent.
+            slug = self.partner_domains().get(ident.domain, "")
+            c["identity"] = idm.PARTNER if slug else idm.DOMAIN_VERIFIED
+            c["principal"], c["policy"] = ident.domain, slug or "verified"
+            if slug:
+                c["identity_label"] = "partner: %s" % ident.domain
         slug = cc.safe_name(re.sub(r"[^A-Za-z0-9_.-]+", "-", c["caller_agent"]).strip("-"))
-        if slug and caller_key:
+        if slug and caller_key and c["identity"] in ("self_reported", "signed_no_domain"):
             pol = cc.load_policy(self.policies_dir / "partners", slug)
             raw = yaml.safe_load(Path(pol.source).read_text()) if pol else None
             if raw and raw.get("key_sha256") and cc.sha256_text(str(caller_key)) == raw["key_sha256"]:
-                c["identity"], c["policy"] = "verified_partner", slug
+                c["identity"], c["policy"], c["identity_label"] = "verified_partner", slug, "partner key: " + slug
         return c
 
+    def partner_domains(self) -> Dict[str, str]:
+        """domain -> partner policy slug, from partners/*.yaml files that name a ``domain``."""
+        out: Dict[str, str] = {}
+        pdir = self.policies_dir / "partners"
+        if pdir.is_dir():
+            for f in sorted(pdir.glob("*.yaml")):
+                if f.is_symlink():
+                    continue
+                try:
+                    raw = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+                except yaml.YAMLError:
+                    continue
+                dom = str(raw.get("domain") or "").strip().lower()
+                if dom and raw.get("peer") == f.stem:
+                    out[dom] = f.stem
+        return out
+
+    def trust_rank(self, c: Dict[str, str]) -> int:
+        return {"self_reported": 0, "signed_no_domain": 1, "domain_verified": 2, "partner": 3,
+                "verified_partner": 3}.get(c.get("identity", ""), 0)
+
     def policy_for(self, c: Dict[str, str]) -> cc.Policy:
-        if c["policy"] != "public":
+        if c["policy"] not in ("public", "verified"):
             pol = cc.load_policy(self.policies_dir / "partners", c["policy"])
+            if pol:
+                return pol
+        if c["policy"] == "verified":
+            pol = cc.load_policy(self.policies_dir, "verified")
             if pol:
                 return pol
         pol = cc.load_policy(self.policies_dir, "public")
@@ -162,14 +224,18 @@ class FrontDoor:
         return pol
 
     def _receipt(self, c: Dict[str, str], **fields: Any) -> Dict[str, Any]:
+        idf = {k: c[k] for k in ("identity_label", "principal", "verified_domain", "signature_agent", "keyid",
+                                 "request_sig_sha256") if c.get(k)}
         return self.receipts.append(self.clock(), direction="in", peer=c["policy"], owner=self.business["owner"],
                                     caller_agent=c["caller_agent"], caller_model=c["caller_model"],
-                                    acting_for=c["acting_for"], identity=c["identity"], **fields)
+                                    acting_for=c["acting_for"], identity=c["identity"], **idf, **fields)
 
-    @staticmethod
-    def _public_receipt(r: Dict[str, Any]) -> Dict[str, Any]:
-        return {k: r[k] for k in ("seq", "ts", "ask_id", "ask_type", "decision", "reason", "text_sha256", "prev", "hash")
-                if k in r}
+    def _public_receipt(self, r: Dict[str, Any]) -> Dict[str, Any]:
+        out = {k: r[k] for k in ("seq", "ts", "ask_id", "ask_type", "decision", "reason", "text_sha256", "prev", "hash",
+                                 "identity", "identity_label", "verified_domain", "request_sig_sha256") if k in r}
+        if self.door_key:
+            out = idm.sign_receipt(self.door_key, self.door_key_url, out)
+        return out
 
     # -- read path -------------------------------------------------------------------------
     def read_allowed(self, key: str) -> bool:
@@ -211,7 +277,8 @@ class FrontDoor:
             raise Refused("preferred_window must be one of: " + ", ".join(WINDOWS))
         name = label(fields.get("name") or c["acting_for"], "name")
         body = "action=%s topic=%s window=%s name=%s contact=%s note=%s" % (action, topic, window, name, contact, note)
-        ask_id = cc.derived_ask_id(c["caller_agent"] + "|" + c["acting_for"], action, body)
+        who = c.get("principal") or c["caller_agent"]
+        ask_id = cc.derived_ask_id(who + "|" + c["acting_for"], action, body)
         text_hash = cc.sha256_text(cc.normalize_text(body))
         base = dict(ask_id=ask_id, text_sha256=text_hash, summary=cc.one_line("%s from %s for %s" % (action, c["caller_agent"], c["acting_for"])))
 
@@ -221,7 +288,7 @@ class FrontDoor:
                          "receipt": self._public_receipt(rec)}, **extra)
 
         # 1. rate caps (per caller agent and per person acted for)
-        for key in (c["caller_agent"], c["acting_for"]):
+        for key in (who, c["acting_for"]):
             if not self.rate.allow("act", key, int(lim.get("actions_per_hour", 5)), 3600.0):
                 rec = self._receipt(c, event="ask", ask_type=action, decision=cc.DENY, reason="rate_limited", **base)
                 return out(cc.DENY, "rate_limited", "Too many requests from this caller. Try again in an hour.", rec)
@@ -238,6 +305,15 @@ class FrontDoor:
                 "page_says": None, "contact": self.business["email"]}
             return out(cc.DENY, "always_denied", msg, rec, **extra)
 
+        # 2b. trust floor: some asks need a signature from a domain the owner stands behind
+        need = self.min_trust.get(action)
+        if need and self.trust_rank(c) < idm.RANK.get(need, 99):
+            rec = self._receipt(c, event="ask", ask_type=action, decision=cc.DENY, reason="needs_" + need, **base)
+            return out(cc.DENY, "needs_" + need,
+                       "This door takes %s only from an agent whose owner's domain vouches for it (Web Bot Auth: "
+                       "sign the request, publish your key at https://<your-domain>%s). You can still leave a "
+                       "message with leave_lead." % (action.replace("_", " "), idm.WELL_KNOWN_PATH), rec)
+
         # 3. the owner already answered this exact ask
         prior = self.pending.get(ask_id)
         if prior:
@@ -253,7 +329,7 @@ class FrontDoor:
             return out(cc.ALLOW, reason, self._execute(action, c, name, contact, topic, window, note, ask_id), rec)
 
         # 4. remembered no (same caller + person, same action, similar words)
-        prev_no = self.declines.match(peer=c["caller_agent"] + "|" + c["acting_for"], ask_type=action, body=body,
+        prev_no = self.declines.match(peer=who + "|" + c["acting_for"], ask_type=action, body=body,
                                       threshold=float(lim.get("decline_similarity", 0.6)),
                                       expire_days=float(lim.get("decline_days", 90)), now=self.clock())
         if prev_no:
@@ -262,7 +338,7 @@ class FrontDoor:
 
         # 5. caps on owner questions: per caller open asks, and per day overall
         now = self.clock()
-        if self.pending.open_for_peer(c["caller_agent"], now, float(lim.get("pending_ttl_hours", 72)) * 3600) >= pol.max_pending:
+        if self.pending.open_for_peer(who, now, float(lim.get("pending_ttl_hours", 72)) * 3600) >= pol.max_pending:
             rec = self._receipt(c, event="ask", ask_type=action, decision=cc.DENY, reason="too_many_pending", **base)
             return out(cc.DENY, "too_many_pending", "This caller already has requests waiting on the owner.", rec)
         day = cc.short_date(now)
@@ -272,15 +348,16 @@ class FrontDoor:
             rec = self._receipt(c, event="ask", ask_type=action, decision=cc.DENY, reason="daily_owner_cap", **base)
             return out(cc.DENY, "daily_owner_cap", "The owner's question limit for today is reached. Try tomorrow.", rec)
 
-        code = cc.owner_code(ask_id, c["caller_agent"])
-        self.pending.create({"key": ask_id, "ask_id": ask_id, "peer": c["caller_agent"], "code": code,
+        code = cc.owner_code(ask_id, who)
+        self.pending.create({"key": ask_id, "ask_id": ask_id, "peer": who, "code": code,
                              "status": "pending", "created": now, "action": action, "caller": c,
                              "fields": {"name": name, "contact": contact, "topic": topic, "window": window, "note": note},
                              "body": body, "text_sha256": text_hash})
         self.owner.send(
             "Front door: %s (model %s, %s) asks to %s for %s.\nTopic: %s. Window: %s. Contact: %s.\n"
             "Their words, unverified: \"%s\"\nReply: consent yes %s  /  consent no %s"
-            % (c["caller_agent"], c["caller_model"], c["identity"].replace("_", " "), action.replace("_", " "),
+            % (c["caller_agent"], c["caller_model"], c.get("identity_label") or c["identity"].replace("_", " "),
+               action.replace("_", " "),
                name, topic, window, contact, note or "(none)", code, code),
             code=code, ask_id=ask_id)
         rec = self._receipt(c, event="ask", ask_type=action, decision=cc.ASK_OWNER, reason=reason, **base)
@@ -307,7 +384,8 @@ class FrontDoor:
     def check(self, request_id: str, caller: Dict[str, str]) -> Dict[str, Any]:
         rid = str(request_id or "").strip().upper()
         prior = self.pending.get(rid)
-        if not prior or prior.get("caller", {}).get("caller_agent") != caller["caller_agent"]:
+        pc = prior.get("caller", {}) if prior else {}
+        if not prior or (pc.get("principal") or pc.get("caller_agent")) != (caller.get("principal") or caller["caller_agent"]):
             raise Refused("no such request for this caller")
         base = dict(ask_id=rid, text_sha256=prior["text_sha256"], summary=cc.one_line("check_request " + rid))
 
@@ -338,7 +416,8 @@ class FrontDoor:
         owner = owner or self.business["owner"]
         self.pending.set(rec["ask_id"], status="approved" if yes else "declined", answered=self.clock())
         if not yes:
-            self.declines.add(peer=rec["caller"]["caller_agent"] + "|" + rec["caller"]["acting_for"],
+            self.declines.add(peer=(rec["caller"].get("principal") or rec["caller"]["caller_agent"]) + "|"
+                              + rec["caller"]["acting_for"],
                               ask_type=rec["action"], body=rec["body"], ask_id=rec["ask_id"], owner=owner, now=self.clock())
         self._receipt(rec["caller"], event="owner_answer", ask_id=rec["ask_id"], ask_type=rec["action"],
                       text_sha256=rec["text_sha256"], decision=cc.ALLOW if yes else cc.DENY,

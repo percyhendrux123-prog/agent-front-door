@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from agent_front_door import consent_core as cc
+from agent_front_door import identity as idm
 from agent_front_door.door import FrontDoor, Refused, clean_note
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -27,6 +28,13 @@ def door(tmp_path):
 
 def stranger(door, agent="gemini-scout", who="Dana Ruiz"):
     return door.caller(agent, "gemini-3-pro", who)
+
+
+def verified(door, domain="carol-agent.example", agent="claude-scout", who="Dana Ruiz"):
+    """A caller whose signature the HTTP layer verified for ``domain`` (see test_identity.py for the real check)."""
+    ident = idm.Identity(level=idm.DOMAIN_VERIFIED, reason="ok", agent_url=idm.well_known_url(domain),
+                         domain=domain, keyid="k-" + domain, signature_sha256="00" * 32)
+    return door.caller(agent, "claude-opus-5-5", who, identity=ident)
 
 
 def partner(door):
@@ -99,7 +107,7 @@ def test_allowed_path_for_verified_partner(door):
 
 
 def test_owner_approved_path(door):
-    c = stranger(door)
+    c = verified(door)
     r = door.act("request_call", c, CALL)
     assert r["status"] == "waiting"
     msgs = door.owner.read()
@@ -116,7 +124,7 @@ def test_owner_approved_path(door):
 
 
 def test_owner_no_is_remembered(door):
-    c = stranger(door)
+    c = verified(door)
     r = door.act("request_call", c, CALL)
     door.owner_answer(door.owner.read()[0]["code"], False)
     assert door.check(r["request_id"], c)["reason"] == "owner_declined"
@@ -163,12 +171,12 @@ def test_rate_cap_per_caller(door):
 
 
 def test_pending_cap_and_daily_owner_cap(door):
-    c = stranger(door)
+    c = verified(door)
     door.act("request_call", c, dict(CALL, note="one"))
     door.act("request_call", c, dict(CALL, note="two"))
     assert door.act("request_call", c, dict(CALL, note="three"))["reason"] == "too_many_pending"
     for i in range(12):
-        door.act("request_call", stranger(door, agent="bot-%d" % i, who="P %d" % i), CALL)
+        door.act("request_call", verified(door, domain="bot-%d.example" % i, who="P %d" % i), CALL)
     assert len(door.owner.read()) == 10  # owner_questions_per_day
 
 
@@ -189,3 +197,62 @@ def test_caller_receipt_matches_door_log(door):
     r = door.act("leave_lead", stranger(door), CALL)
     last = door.receipts.read()[-1]
     assert r["receipt"]["hash"] == last["hash"] and r["receipt"]["prev"] == last["prev"]
+
+
+# -- trust levels from agent identity ---------------------------------------------------------
+def test_unsigned_caller_may_request_a_call_labeled_self_reported(door):
+    r = door.act("request_call", stranger(door), CALL)
+    assert r["status"] == "waiting" and r["reason"] == "listed_for_owner"
+    rec = door.receipts.read()[-1]
+    assert rec["identity"] == "self_reported" and rec["identity_label"] == "self reported"
+    assert "self reported" in door.owner.read()[0]["text"]
+    assert ", verified: " not in door.owner.read()[0]["text"]
+
+
+def test_owner_can_still_require_a_signature_for_an_ask(door):
+    door.min_trust = {"request_call": "domain_verified"}
+    r = door.act("request_call", stranger(door), CALL)
+    assert r["status"] == "denied" and r["reason"] == "needs_domain_verified"
+    assert "leave_lead" in r["message"] and door.owner.read() == []
+    assert door.act("request_call", verified(door), CALL)["status"] == "waiting"
+
+
+def test_verified_domain_is_on_the_receipt_and_in_the_owner_question(door):
+    r = door.act("request_call", verified(door), CALL)
+    assert r["status"] == "waiting"
+    rec = door.receipts.read()[-1]
+    assert rec["identity"] == "domain_verified" and rec["verified_domain"] == "carol-agent.example"
+    assert rec["identity_label"] == "verified: carol-agent.example" and rec["principal"] == "carol-agent.example"
+    assert r["receipt"]["verified_domain"] == "carol-agent.example"
+    assert "verified: carol-agent.example" in door.owner.read()[0]["text"]
+
+
+def test_partner_by_domain_gets_its_allow_list(door):
+    c = verified(door, domain="bob-agent.example")
+    assert c["identity"] == "partner" and c["policy"] == "bob-agent-example"
+    r = door.act("request_call", c, CALL)
+    assert r["status"] == "allowed" and r["reason"] == "allow_list" and door.owner.read() == []
+
+
+def test_a_verified_domain_cannot_shed_a_no_by_renaming_its_agent(door):
+    r = door.act("request_call", verified(door, agent="scout-one"), CALL)
+    door.owner_answer(door.owner.read()[0]["code"], False)
+    same = door.act("request_call", verified(door, agent="scout-two-renamed"), CALL)
+    assert same["status"] == "denied" and same["reason"] == "owner_declined"   # same ask, new name: same no
+    reworded = door.act("request_call", verified(door, agent="scout-three"), dict(CALL, note="We miss calls after 5 PM, daily."))
+    assert reworded["reason"] == "remembered_no" and len(door.owner.read()) == 1
+
+
+def test_self_reported_name_cannot_claim_a_domain(door):
+    c = door.caller("bob-agent.example", "gpt-6", "Bob")   # typing the partner's domain proves nothing
+    assert c["identity"] == "self_reported" and c["policy"] == "public"
+    assert door.act("request_call", c, CALL)["status"] == "waiting"
+    text = door.owner.read()[-1]["text"]
+    assert "self reported" in text and "verified: bob-agent.example" not in text
+
+
+def test_door_signs_the_receipt_it_hands_back(door):
+    r = door.act("leave_lead", verified(door), CALL)
+    assert idm.verify_receipt(r["receipt"], door.door_directory())
+    forged = dict(r["receipt"], decision="deny")
+    assert not idm.verify_receipt(forged, door.door_directory())

@@ -1,5 +1,7 @@
-# Any caller we have never met. Leaving a lead is safe (it only lands in the owner's inbox).
-# A call or a question the facts page can't answer becomes one yes/no question to the owner.
+# Any caller we have never met, or one that did not sign. Leaving a lead is safe (it only lands in the
+# owner's inbox). A question the facts page can't answer becomes one yes/no question to the owner.
+# A call request is also one yes/no question; the owner sees the caller labeled "self reported".
+# (identity.min_trust in axiom.yaml can require a domain-verified signature for an ask.)
 peer: public
 owner: percy
 allow: [leave_lead]

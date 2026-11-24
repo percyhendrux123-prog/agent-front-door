@@ -70,13 +70,46 @@ Decision order for every act: validate labels and email, rate cap, hard floor, p
 
 Identity is **self-reported** unless a partner key matches. Self-reported names are recorded and shown to the owner as such; they never unlock an allow-list.
 
+### Agent identity (Web Bot Auth)
+
+Plain English: see [docs/IDENTITY-ONE-PAGER.md](docs/IDENTITY-ONE-PAGER.md). Research and sources: [docs/IDENTITY-RESEARCH.md](docs/IDENTITY-RESEARCH.md).
+
+**Standard.** Callers sign HTTP requests per draft-ietf-webbotauth-httpsig-protocol-01 (RFC 9421 HTTP Message Signatures, Ed25519). Keys are a JWK Set at `https://<owner-domain>/.well-known/http-message-signatures-directory`, served as `application/http-message-signatures-directory+json`. `keyid` is the RFC 7638/8037 thumbprint and the verifier computes it itself, never trusting a `kid` label. `agent_front_door/identity.py` reproduces RFC 9421 B.2.6 and the draft's E.2.1 Ed25519 vectors.
+
+**Door profile (stricter than the draft minimum).** Covered components must include `@method`, `@authority` (or `@target-uri`), `@path`, `content-digest` (RFC 9530 sha-256 of the body), `"signature-agent";key=<label>`, and `@query` when there is a query. Required params: `created`, `expires` (lifetime at most 300 s, skew 60 s), `keyid`, `nonce` (at least 16 chars, single use per agent URL until expiry), `tag="web-bot-auth"`, and `alg` absent or `ed25519`. The signature base uses the door's configured authority (`identity.authority`), not the request's Host header, so a signature made for another door fails.
+
+**Directory response signature.** The draft says a verifier relying on the domain MUST check the directory response's own signatures. Both verifiers (Python and the Worker) keep only keys that signed the response for the directory's host: `Signature-Input` with `tag="http-message-signatures-directory"`, keyid = that key's thumbprint, covering `"@authority";req`, in date (lifetime at most 90 days so a static host can serve fixed headers). A copy of the file and headers on another host gives no keys. `tools/key_directory.py` writes the file and the headers.
+
+**Key discovery.** The verifier fetches the `Signature-Agent` URL with GET, no redirects, a 3 s timeout and a 64 KB cap. It must be https, a DNS name (not an IP literal, localhost or a .local name), on the default port, with no credentials. Cache time is `min(publisher max-age, identity.key_cache_s)`, default 300 s. That is the revocation window. A failed refresh keeps already-held keys for at most one extra negative-cache period (60 s) and never extends trust beyond that. Lookup is by (URL, thumbprint), as the draft requires.
+
+**Levels.**
+
+| Level | Meaning | Door policy |
+|---|---|---|
+| `unsigned` | No signature, or the key directory was unreachable | `public.yaml`: may ask for a call; the owner sees "self reported". (`identity.min_trust` can require a level per ask; Axiom's is empty.) |
+| `signed` | Valid signature; the key URL is not a domain's well-known path | Treated as public; principal = `key:<thumbprint>` |
+| `domain_verified` | Valid signature; key published at the domain's well-known path | `verified.yaml` (`request_call` asks the owner) |
+| `partner` | Domain-verified, and `policies/partners/<x>.yaml` names that `domain:` | That partner's allow-list |
+
+A presented signature that fails (forged key, wrong domain, replay, expired, tampered body, revoked) gets HTTP **401** with a reason code and `Accept-Signature`, and the MCP server never sees the request. An unsigned request is not penalised. Identity is carried in the ASGI scope state from `IdentityMiddleware`. Tool arguments and custom headers cannot set it. `who_am_i` shows the caller how the door sees it.
+
+**Principal.** Rate caps, pending caps, owner-answer binding and remembered no's key on the verified domain (or key thumbprint), not on the self-typed `caller_agent`.
+
+**Receipts.** The door log adds `identity`, `identity_label`, `principal`, `verified_domain`, `signature_agent`, `keyid` and `request_sig_sha256` (sha256 of the caller's signature bytes). The receipt returned to the caller carries `door_signature` (Ed25519 over the receipt's chain hash and decision fields, with the door key's thumbprint and key URL). The door serves its own directory at the well-known path, and `identity.verify_receipt` checks it on the caller side.
+
+**Revocation.** The owner of the caller's domain removes the key (or sets JWK `exp`), and doors stop trusting it within `key_cache_s`. The door owner can list `identity.revoked_keyids` or `identity.revoked_agents` for an immediate local block.
+
+**Limits.** This proves which domain's owner stands behind a request. It does not prove that owner is honest, that the named person (`acts_for`) agreed, or that the ask is wise. Those stay with the consent rules and the owner. stdio clients can't carry HTTP signatures and are always `unsigned`. The Python door's nonce store is in memory. The hosted Worker (`worker/src/identity.js`, a port that gives the same level and reason as `identity.py` on every shared vector, `worker/test/identity_vectors.mjs`) keeps nonces in its Durable Object, so a replay is refused across all instances. The Worker does not sign its receipts yet (it would need a door key as a Worker secret); its receipts carry the identity fields and the caller's signature hash.
+
+**Consent network.** The same `identity.py` ships in hermes-consent-network. A verified domain becomes the peer name. Peer files can require `partner` or `domain_verified` per ask type. A2A token peers count as partners, since the owner issued them a credential.
+
 ### Abuse limits
 
 - Rate caps: 60 reads per minute per caller; 5 acts per hour per caller agent and per person acted for; 2 open owner questions per public caller; 10 owner questions per day across everyone. All in `config/axiom.yaml`.
 - Free text: notes capped at 280 characters; links, control characters and bidi overrides removed; labels limited to 64 plain characters. Caller text is never passed to any model, only stored for the owner and shown as "their words, unverified".
 - Floor words: price, payment, refund, deletion, sends to others, client data or credentials, commitments. A hit is refused before policy, for partners too, and the reply quotes the page (for price: "The scope, price, schedule and deliverables of each engagement are set in a written proposal, invoice or agreement.").
 - Fail closed: no `public.yaml` means strangers can do nothing.
-- Hosted door adds: per-IP caps at the edge, a 16 KB request cap, 10 acts an hour per address. Not yet: partner keys (every hosted caller is self reported) and an alert when the daily owner cap trips.
+- Hosted door adds: per-IP caps at the edge, a 16 KB request cap, 10 acts an hour per address. Signature checks are on (caller labeled self reported or verified: <domain>); the partner list is empty. Not yet: door-signed receipts on the hosted door, and an alert when the daily owner cap trips.
 
 ### Open source
 

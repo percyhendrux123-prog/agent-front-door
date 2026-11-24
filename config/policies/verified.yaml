@@ -1,0 +1,8 @@
+# A caller whose owner's domain vouches for it (Web Bot Auth, key at the domain's well-known path).
+# Same as public, and it may ask for a call (still one yes/no question to the owner).
+peer: verified
+owner: percy
+allow: [leave_lead]
+ask_owner: [request_call, ask_question]
+deny: []
+max_pending: 2

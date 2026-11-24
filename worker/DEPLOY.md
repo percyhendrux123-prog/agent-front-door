@@ -1,7 +1,7 @@
 # Hosted door (Cloudflare Workers Free)
 
 The door runs as one Worker plus one SQLite-backed Durable Object. Read tools (`door_rules`,
-`list_facts`, `lookup_fact`) touch no storage. Act tools (`request_call`, `ask_question`,
+`list_facts`, `lookup_fact`, `who_am_i`) touch no storage. Act tools (`request_call`, `ask_question`,
 `leave_lead`, `check_request`) are decided inside the Durable Object.
 
 Host rule: the door never runs on a machine that holds anything private, and the owner's machine is
@@ -18,6 +18,21 @@ never opened to inbound traffic. The Worker holds only the public facts page's w
   tier limits, further operations of that type will fail with an error."
 - Rate limiting bindings: per address 30 requests/minute, whole door 600/minute per location.
 - Keep the account on Workers Free. Upgrading to Workers Paid is the only way this can bill.
+
+## Caller identity (Web Bot Auth)
+
+`src/identity.js` checks a request's Web Bot Auth signature before any tool runs (`identity` in
+`src/door.config.json`). No signature: the caller is labeled self reported and can do everything.
+A valid signature with the key at `https://<domain>/.well-known/http-message-signatures-directory`:
+labeled `verified: <domain>`. A signature that fails: HTTP 401, a reason code, a pointer to the
+standard and an `Accept-Signature` header. The only outbound request the Worker makes is a GET of a
+signed caller's key directory (cached at most 5 minutes; a Free plan Worker may make 50 per request).
+One-time nonces are kept in the Durable Object. `min_trust` can require a level per ask (empty here).
+
+```sh
+node worker/test/identity_vectors.mjs                     # Worker verifier vs RFC/draft vectors + Python reference
+uv run python worker/test/identity_e2e.py https://<door> --key-file <signer key> [--call]
+```
 
 ## Deploy
 
@@ -44,6 +59,7 @@ It only connects out. `AFD_SENDER=stdout` is a dry run.
 cd worker && echo "OWNER_TOKEN_SHA256=<sha256 of a test token>" > .dev.vars   # git-ignored
 npx wrangler@4.168.0 dev --port 8787
 python3 worker/test/act_e2e.py http://127.0.0.1:8787 --token-file <test token file> --owner-sim --cap
+uv run python worker/test/identity_e2e.py http://127.0.0.1:8787 --key-file <signer key> --call --unsigned-call
 ```
 
 ## Undo

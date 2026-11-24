@@ -16,3 +16,15 @@ limits:
   pending_ttl_hours: 72
   decline_days: 90                  # how long a no is remembered
   decline_similarity: 0.6
+identity:
+  # Web Bot Auth (RFC 9421 HTTP Message Signatures). Who a caller is, by the domain that publishes its key.
+  authority: 127.0.0.1:8765          # the host:port callers sign for; production = the door's own host
+  # Owner's rule (11-24): any caller may ask for a call; the owner's question says "self reported" or
+  # "verified: <domain>". To require a signature for an ask, list it here, e.g. request_call: domain_verified
+  min_trust: {}
+  max_signature_lifetime_s: 300      # refuse signatures valid for longer than 5 minutes
+  key_cache_s: 300                   # re-check a caller's key directory at least every 5 minutes (revocation)
+  sign_receipts: true                # the door signs each receipt it returns (key lives in the state dir)
+  door_key_url: http://127.0.0.1:8765/.well-known/http-message-signatures-directory
+  revoked_keyids: []                 # owner kill switch: refuse these keys even if their domain still lists them
+  revoked_agents: []                 # or whole Signature-Agent URLs

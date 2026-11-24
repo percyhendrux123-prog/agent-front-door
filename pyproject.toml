@@ -5,6 +5,7 @@ requires-python = ">=3.11"
 description = "An open MCP front door any AI agent can talk to, with the owner's consent rules on every action."
 license = "MIT"
 dependencies = [
+    "cryptography>=43",
     "mcp>=2.3.0",
     "pyyaml>=6.0.4",
 ]

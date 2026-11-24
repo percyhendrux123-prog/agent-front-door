@@ -5,7 +5,8 @@
   //   100,000 requests/day, 13,000 GB-s/day, 5 million rows read/day, 100,000 rows written/day,
   //   5 GB stored. Over any limit, operations fail with an error; the Free plan does not bill.
   // Secret: OWNER_TOKEN_SHA256 (sha256 of the owner's pull token; the token itself never leaves the owner's machine).
-  // The door makes no outbound requests: the owner's machine pulls questions and pushes answers.
+  // The door's only outbound requests are GETs of a signed caller's public key directory (Web Bot Auth),
+  // cached up to 5 minutes. It never connects to the owner's machine: that machine pulls questions and pushes answers.
   // Over the Workers Free 100,000 requests/day Cloudflare returns error 1027 instead of billing.
   "name": "axiom-front-door",
   "main": "src/index.js",

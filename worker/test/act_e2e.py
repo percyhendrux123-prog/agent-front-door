@@ -91,8 +91,8 @@ def main():
     init = d.rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "e2e", "version": "0"}})
     check("initialize", init.get("result", {}).get("serverInfo", {}).get("name") == "agent-front-door")
     tools = sorted(t["name"] for t in d.rpc("tools/list")["result"]["tools"])
-    check("7 tools listed", tools == sorted(["door_rules", "list_facts", "lookup_fact", "request_call", "ask_question",
-                                             "leave_lead", "check_request"]), tools)
+    check("8 tools listed", tools == sorted(["door_rules", "list_facts", "lookup_fact", "who_am_i", "request_call",
+                                             "ask_question", "leave_lead", "check_request"]), tools)
     st, r = d.http("POST", "/owner/pull", {})
     check("owner side closed without token", d.http("POST", "/owner/pull", {}, owner=False)[0] == 401)
 

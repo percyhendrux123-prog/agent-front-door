@@ -15,8 +15,11 @@ import { DurableObject } from "cloudflare:workers";
 import { createHash, timingSafeEqual } from "node:crypto";
 import BUNDLE from "./facts.json";
 import CFG from "./door.config.json";
+import * as ID from "./identity.js";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
+const IDC = CFG.identity || { enabled: false };
+const DIR_CACHE = new Map(); // key directories, per isolate, at most 5 minutes (identity.js)
 const PROTOCOLS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 const MAX_BODY = 16 * 1024;
 const STOP = new Set(BUNDLE.stop);
@@ -36,7 +39,10 @@ const RULES =
   "until he answers, and you collect the answer with check_request. A no is remembered and he is not asked again.\n" +
   "Always refused, for everyone: prices, payments, refunds, deleting data, client data or passwords, sending messages " +
   "to anyone else, and commitments in the owner's name.\n" +
-  "Say who you are: caller_agent, caller_model and acting_for are recorded as self reported. Every answer carries a " +
+  "Say who you are: caller_agent, caller_model and acting_for are recorded as self reported. To be shown to the owner as " +
+  "'verified: <your domain>', sign each HTTP request with Web Bot Auth (" + ID.STANDARD_URL + "): RFC 9421 Ed25519 over " +
+  "@method, @authority, @path, content-digest and signature-agent, key published at https://<your-domain>" + ID.WELL_KNOWN_PATH +
+  ". Unsigned callers can still do everything here; the owner sees them as self reported. A signature that fails is refused. Every answer carries a " +
   "receipt (hash chained) so both sides can prove what happened.\n" +
   "Limits: notes and questions are cut to " + BUNDLE.note_max + " characters with links removed; the owner takes at most " +
   LIM.owner_messages_per_day + " questions or leads a day across all callers; requests are rate limited.";
@@ -158,11 +164,22 @@ export class DoorState extends DurableObject {
         CREATE TABLE IF NOT EXISTS declines (id INTEGER PRIMARY KEY AUTOINCREMENT, peer TEXT, action TEXT, norm TEXT, ts REAL, ask_id TEXT);
         CREATE TABLE IF NOT EXISTS acts (ts REAL, key TEXT);
         CREATE TABLE IF NOT EXISTS daily (day TEXT PRIMARY KEY, n INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS nonces (k TEXT PRIMARY KEY, until REAL NOT NULL);
       `);
     });
   }
 
   rows(q, ...p) { return this.sql.exec(q, ...p).toArray(); }
+
+  // Web Bot Auth replay guard: each (agent URL, nonce) is accepted once, until its signature expires.
+  async nonce(agentUrl, nonce, until) {
+    const now = Date.now() / 1000;
+    this.sql.exec("DELETE FROM nonces WHERE until < ?", now);
+    const k = sha256(String(agentUrl) + "\0" + String(nonce));
+    if (this.rows("SELECT k FROM nonces WHERE k = ?", k).length) return false;
+    this.sql.exec("INSERT INTO nonces (k, until) VALUES (?, ?)", k, Number(until) || now + 360);
+    return true;
+  }
 
   expire(now) {
     this.sql.exec("UPDATE asks SET status='expired' WHERE status='pending' AND created < ?", now - LIM.pending_ttl_hours * 3600);
@@ -180,7 +197,8 @@ export class DoorState extends DurableObject {
 
   static pub(r) {
     const out = {};
-    for (const k of ["seq", "ts", "ask_id", "ask_type", "decision", "reason", "text_sha256", "prev", "hash"]) if (k in r) out[k] = r[k];
+    for (const k of ["seq", "ts", "ask_id", "ask_type", "decision", "reason", "text_sha256", "identity", "identity_label",
+                     "verified_domain", "request_sig_sha256", "prev", "hash"]) if (k in r) out[k] = r[k];
     return out;
   }
 
@@ -189,22 +207,27 @@ export class DoorState extends DurableObject {
     return { request_id: askId, status, reason, message, receipt: DoorState.pub(rec), ...extra };
   }
 
-  // One decision for one ask. c = {caller_agent, caller_model, acting_for, identity}
+  // One decision for one ask. c = callerOf(): self-reported names plus the identity the HTTP layer verified.
+  // The principal (verified domain, or the self-reported agent name) is what caps and remembered no's
+  // attach to, so a verified domain cannot shed a no by renaming its agent.
   async act(action, c, f, ipKey) {
     const now = Date.now() / 1000;
     this.expire(now);
-    const peer = c.caller_agent + "|" + c.acting_for;
+    const principal = c.principal || c.caller_agent;
+    const peer = principal + "|" + c.acting_for;
     const body = `action=${action} topic=${f.topic} window=${f.window} name=${f.name} contact=${f.contact} note=${f.note}`;
     const askId = askIdFor(peer, action, body);
     const textSha = sha256(normalize(body));
-    const who = { caller_agent: c.caller_agent, caller_model: c.caller_model, acting_for: c.acting_for, identity: c.identity };
+    const who = { caller_agent: c.caller_agent, caller_model: c.caller_model, acting_for: c.acting_for, identity: c.identity,
+                  identity_label: c.identity_label || "self reported" };
+    for (const k of ["verified_domain", "signature_agent", "keyid", "request_sig_sha256"]) if (c[k]) who[k] = c[k];
     const base = { ask_id: askId, text_sha256: textSha, ...who };
     const deny = (reason, msg, type = action, extra = {}) =>
       this.out(askId, "deny", reason, msg, this.receipt({ event: "ask", ask_type: type, decision: "deny", reason, ...base }), extra);
 
     // 1. rate caps: per caller IP, per caller agent, per person acted for (rolling hour)
     this.sql.exec("DELETE FROM acts WHERE ts < ?", now - 3600);
-    const keys = [["ip:" + ipKey, LIM.acts_per_hour_per_ip], ["agent:" + c.caller_agent, LIM.acts_per_hour_per_caller],
+    const keys = [["ip:" + ipKey, LIM.acts_per_hour_per_ip], ["agent:" + principal, LIM.acts_per_hour_per_caller],
                   ["person:" + c.acting_for, LIM.acts_per_hour_per_person]];
     for (const [k, lim] of keys) {
       const n = this.rows("SELECT COUNT(*) AS n FROM acts WHERE key = ?", k)[0].n;
@@ -218,6 +241,13 @@ export class DoorState extends DurableObject {
       const ref = BUNDLE.floor_reply[floor] ? BUNDLE.facts.find((x) => x.id === BUNDLE.floor_reply[floor]) : null;
       return deny("always_denied", FLOOR_MSG(floor), floor, ref ? { page_says: ref.answer, source: BUNDLE.source } : { page_says: null });
     }
+
+    // 2b. trust floor: the owner can require a verified domain for an ask (identity.min_trust; empty = no floor)
+    const need = (IDC.min_trust || {})[action];
+    if (need && (ID.RANK[c.identity] ?? 0) < (ID.RANK[need] ?? 99))
+      return deny("needs_" + need, "This door takes " + action.replace("_", " ") + " only from an agent whose owner's domain " +
+                  "vouches for it. Sign the request with Web Bot Auth (" + ID.STANDARD_URL + ") and publish your key at " +
+                  "https://<your-domain>" + ID.WELL_KNOWN_PATH + ". You can still leave a message with leave_lead.");
 
     // 3. the owner already answered this exact ask
     let prior = this.rows("SELECT * FROM asks WHERE ask_id = ?", askId)[0];
@@ -362,6 +392,9 @@ const TOOLS = [
     inputSchema: { type: "object", properties: { question: { type: "string", maxLength: 2000 },
       caller_agent: { type: "string", maxLength: 64 } }, required: ["question"], additionalProperties: false },
     annotations: READ },
+  { name: "who_am_i", title: "Who am I to this door",
+    description: "How the door sees this request: self reported (unsigned), or verified for a domain (Web Bot Auth signature).",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: READ },
   { name: "request_call", title: "Request a call",
     description: "Ask for a call with the founder for the person you act for. Becomes one yes/no question to the owner; " +
                  "collect the answer later with check_request. Never books, never charges.",
@@ -419,9 +452,32 @@ function readTool(name, args) {
   return undefined;
 }
 
-function callerOf(a) {
-  return { caller_agent: label(a.caller_agent, "caller_agent"), caller_model: label(a.caller_model, "caller_model"),
-           acting_for: label(a.acting_for, "acting_for"), identity: "self_reported" };
+// Names come from tool arguments (self reported). Identity comes only from the HTTP signature check,
+// never from arguments, so typing a domain proves nothing.
+function callerOf(a, ident) {
+  const c = { caller_agent: label(a.caller_agent, "caller_agent"), caller_model: label(a.caller_model, "caller_model"),
+              acting_for: label(a.acting_for, "acting_for"), identity: "self_reported", identity_label: "self reported" };
+  c.principal = c.caller_agent;
+  if (ident && ident.reason === "ok" && !ident.rejected) {
+    if (ident.level === ID.SIGNED) Object.assign(c, { identity: "signed_no_domain", principal: "key:" + ident.keyid });
+    if (ident.level === ID.DOMAIN_VERIFIED || ident.level === ID.PARTNER)
+      Object.assign(c, { identity: ident.level, principal: ident.domain, verified_domain: ident.domain });
+    Object.assign(c, { identity_label: ID.label(ident), signature_agent: ident.agent_url, keyid: ident.keyid,
+                       request_sig_sha256: ident.signature_sha256 });
+  }
+  return c;
+}
+
+function whoAmI(ident) {
+  const i = ident || { level: ID.UNSIGNED, reason: "no_signature" };
+  const out = { identity: i.level, label: ID.label(i), reason: i.reason,
+    how_to_verify: "Sign each request with Web Bot Auth (" + ID.STANDARD_URL + ") and publish your key at https://<your-domain>" +
+                   ID.WELL_KNOWN_PATH + ". The owner then sees 'verified: <your-domain>'." };
+  if (i.domain) out.verified_domain = i.domain;
+  if (i.agent_url) out.signature_agent = i.agent_url;
+  if (i.keyid) out.keyid = i.keyid;
+  if (i.card && Object.keys(i.card).length) out.card_from_your_domain = i.card;
+  return out;
 }
 
 function fieldsOf(action, a, c) {
@@ -436,10 +492,10 @@ function fieldsOf(action, a, c) {
   return { name, contact, topic, window, note };
 }
 
-async function actTool(name, args, env, ipKey) {
+async function actTool(name, args, env, ipKey, ident) {
   const stub = env.DOOR.get(env.DOOR.idFromName(CFG.door_id));
   if (name === "check_request") return await stub.check(args.request_id, label(args.caller_agent, "caller_agent"));
-  const c = callerOf(args);
+  const c = callerOf(args, ident);
   if (name === "ask_question") {
     const q = cleanNote(args.question);
     if (!q) throw new Refused("question is empty");
@@ -457,7 +513,7 @@ async function actTool(name, args, env, ipKey) {
 const ok = (id, result) => ({ jsonrpc: "2.0", id, result });
 const err = (id, code, message) => ({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
 
-async function handle(msg, env, ipKey) {
+async function handle(msg, env, ipKey, ident) {
   if (!msg || typeof msg !== "object" || msg.jsonrpc !== "2.0" || typeof msg.method !== "string")
     return err(msg && msg.id, -32600, "Invalid Request");
   if (!("id" in msg)) return null; // notifications: accepted, nothing to say
@@ -481,7 +537,8 @@ async function handle(msg, env, ipKey) {
       const args = params.arguments && typeof params.arguments === "object" ? params.arguments : {};
       let res;
       try {
-        res = ACT_NAMES.has(name) ? await actTool(name, args, env, ipKey) : readTool(name, args);
+        res = ACT_NAMES.has(name) ? await actTool(name, args, env, ipKey, ident)
+            : name === "who_am_i" ? whoAmI(ident) : readTool(name, args);
       } catch (e) {
         if (e instanceof Refused) {
           const r = { status: "refused", message: e.message };
@@ -500,7 +557,7 @@ async function handle(msg, env, ipKey) {
 }
 
 const HDRS = { "content-type": "application/json", "cache-control": "no-store", "x-content-type-options": "nosniff",
-               "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, accept, mcp-protocol-version, mcp-session-id",
+               "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, accept, mcp-protocol-version, mcp-session-id, signature, signature-input, signature-agent, content-digest",
                "access-control-allow-methods": "POST, OPTIONS" };
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: HDRS });
 
@@ -570,7 +627,24 @@ export default {
     try { msg = JSON.parse(text); } catch { return json(err(null, -32700, "Parse error"), 400); }
     if (Array.isArray(msg)) return json(err(null, -32600, "batches are not supported"), 400);
     const ipKey = sha256("afd-ip\0" + ip).slice(0, 16);
-    const out = await handle(msg, env, ipKey);
+
+    // Who is calling: Web Bot Auth signature check. No signature = self reported (still welcome).
+    // A signature that fails is refused outright, before any tool runs.
+    let ident = null;
+    if (IDC.enabled) {
+      const stub = env.DOOR.get(env.DOOR.idFromName(CFG.door_id));
+      const v = new ID.Verifier(url.host, { cache: DIR_CACHE, partners: IDC.partners || {}, revokedKeyids: IDC.revoked_keyids || [],
+        revokedAgents: IDC.revoked_agents || [], maxLifetime: IDC.max_signature_lifetime_s || 300,
+        cacheTtl: IDC.key_cache_s || 300, seenNonce: (a, n, until) => stub.nonce(a, n, until) });
+      ident = await v.verify(request.method, url.pathname + url.search, request.headers, new TextEncoder().encode(text));
+      if (ident.rejected) {
+        const reason = String(ident.reason).split(":")[0];
+        return new Response(JSON.stringify({ jsonrpc: "2.0", id: msg && msg.id !== undefined ? msg.id : null,
+          error: { code: -32001, message: ID.refusalMessage(reason), data: { status: "refused", reason, standard: ID.STANDARD_URL } } }),
+          { status: 401, headers: { ...HDRS, "accept-signature": ID.ACCEPT_SIGNATURE } });
+      }
+    }
+    const out = await handle(msg, env, ipKey, ident);
     if (out === null) return new Response(null, { status: 202, headers: HDRS });
     return json(out);
   },

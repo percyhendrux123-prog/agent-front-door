@@ -29,11 +29,17 @@ def test_stdio_round_trip(tmp_path):
             assert {"list_facts", "lookup_fact", "request_call", "ask_question", "leave_lead", "check_request"} <= names
             facts = out(await c.call_tool("list_facts", {}))
             assert len(facts["facts"]) == 11
-            r = out(await c.call_tool("request_call", dict(who, contact_email="sam@example.com")))
+            # stdio cannot carry an HTTP signature: a call request still goes to the owner, labeled self reported
+            call = out(await c.call_tool("request_call", dict(who, contact_email="sam@example.com")))
+            assert call["status"] == "waiting" and call["receipt"]["identity_label"] == "self reported"
+            me = out(await c.call_tool("who_am_i", {}))
+            assert me["identity"] == "unsigned" and me["label"] == "self reported"
+            r = out(await c.call_tool("ask_question", dict(who, question="Do you work with marinas near Tampa?",
+                                                           contact_email="sam@example.com")))
             assert r["status"] == "waiting"
             # the owner answers on their own channel (here: the same state dir, as the CLI would)
             door = FrontDoor(ROOT / "config" / "axiom.yaml", state)
-            door.owner_answer(door.owner.read()[0]["code"], True)
+            door.owner_answer(door.owner.read()[-1]["code"], True)
             done = out(await c.call_tool("check_request", dict(who, request_id=r["request_id"])))
             assert done["status"] == "allowed"
             refused = out(await c.call_tool("ask_question", dict(

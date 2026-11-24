@@ -3,7 +3,7 @@
 Usage: uv run python worker/test/outside_client.py https://<host>/mcp
 
 Checks, and prints what it saw:
- 1. the client connects over streamable HTTP and lists the 3 read tools (marked read-only) and the
+ 1. the client connects over streamable HTTP and lists the 4 read tools (marked read-only) and the
     4 act tools (none destructive); act-path checks live in act_e2e.py;
  2. list_facts returns the same words as the LIVE deployaxiom.com/facts page, fetched now and
     parsed with the door's own parser (byte check: page sha256 + every question/answer equal);
@@ -50,9 +50,9 @@ async def main(url: str) -> int:
     async with Client(url) as c:
         tools = sorted(t.name for t in (await c.list_tools()).tools)
         print("tools/list ->", tools)
-        check("3 read tools + 4 act tools", tools == sorted(["door_rules", "list_facts", "lookup_fact"] + list(ACT_TOOLS)))
+        check("4 read tools + 4 act tools", tools == sorted(["door_rules", "list_facts", "lookup_fact", "who_am_i"] + list(ACT_TOOLS)))
         listed = {t.name: t for t in (await c.list_tools()).tools}
-        check("read tools marked read-only", all(listed[n].annotations.read_only_hint for n in ("door_rules", "list_facts", "lookup_fact")))
+        check("read tools marked read-only", all(listed[n].annotations.read_only_hint for n in ("door_rules", "list_facts", "lookup_fact", "who_am_i")))
         check("no tool marked destructive", not any(t.annotations.destructive_hint for t in listed.values()))
 
         rules = sc(await c.call_tool("door_rules", {}))

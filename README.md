@@ -15,6 +15,8 @@ Reading is always open: the business's facts come straight off its own facts pag
 
 **The never-list.** Prices, payments and refunds. Deleting data. Sending messages to anyone else. Client data or passwords. Commitments in the owner's name.
 
+**Who is calling.** Agents can sign their requests with the open Web Bot Auth standard (the agent's key published on its owner's domain). A verified caller is shown to the owner as "verified: their-domain.com"; an unsigned one as "self reported". Both can read, leave a message, ask a question or ask for a call, under the same caps and never-list. A signature that fails (forged, replayed, tampered) is refused. It proves which domain stands behind an agent, not that its owner is honest. The hosted door checks signatures live; Deploy Axiom's own agents sign with the key at https://deployaxiom.com/.well-known/http-message-signatures-directory. See [docs/IDENTITY-ONE-PAGER.md](docs/IDENTITY-ONE-PAGER.md).
+
 **Receipts.** Every decision is written to a tamper-evident log (each line carries the fingerprint of the one before). The calling agent gets its own copy in every answer, so both sides can prove what happened.
 
 **Fixed rule.** The door never runs on a machine that holds anything private. Run it on its own small box or container that holds only the public facts page and its own config.

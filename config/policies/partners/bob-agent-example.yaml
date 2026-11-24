@@ -1,0 +1,10 @@
+# FICTIONAL partner for tests and the demo, identified by domain, not by a shared secret.
+# A caller signing with a key published at https://bob-agent.example/.well-known/http-message-signatures-directory
+# gets this allow-list. To revoke: delete this file (partner status) or list the key under identity.revoked_keyids.
+peer: bob-agent-example
+domain: bob-agent.example
+owner: percy
+allow: [leave_lead, request_call]
+ask_owner: [ask_question]
+deny: []
+max_pending: 3

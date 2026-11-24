@@ -427,7 +427,9 @@ class Declines:
 # -- receipts -------------------------------------------------------------------------------
 RECEIPT_FIELDS = ("v", "seq", "ts", "side", "direction", "event", "ask_id", "peer", "owner", "ask_type",
                   "summary", "text_sha256", "decision", "reason", "decided_by", "result", "detail",
-                  "caller_agent", "caller_model", "acting_for", "identity")
+                  "caller_agent", "caller_model", "acting_for", "identity",
+                  # agent identity (identity.py): who stands behind the caller, and the caller's signature hash
+                  "identity_label", "principal", "verified_domain", "signature_agent", "keyid", "request_sig_sha256")
 
 
 def _canonical(rec: Dict[str, Any]) -> bytes:

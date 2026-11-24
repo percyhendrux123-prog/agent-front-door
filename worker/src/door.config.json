@@ -9,6 +9,15 @@
     "ask_owner": ["request_call", "ask_question"],
     "deny": []
   },
+  "identity": {
+    "enabled": true,
+    "min_trust": {},
+    "partners": {},
+    "revoked_keyids": [],
+    "revoked_agents": [],
+    "max_signature_lifetime_s": 300,
+    "key_cache_s": 300
+  },
   "limits": {
     "owner_messages_per_day": 10,
     "max_pending_per_caller": 2,

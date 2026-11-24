@@ -176,7 +176,8 @@ def send(message: str) -> bool:
 
 def render(item: dict, lbl: str) -> str:
     c, f = item["caller"], item["fields"]
-    who = "%s (model %s, %s)" % (c["caller_agent"], c["caller_model"], c.get("identity", "self_reported").replace("_", " "))
+    # "verified: <domain>" only when the door checked a Web Bot Auth signature; otherwise "self reported".
+    who = "%s (model %s, %s)" % (c["caller_agent"], c["caller_model"], c.get("identity_label") or "self reported")
     words = f.get("note") or "(none)"
     pre = (lbl.strip() + ": ") if lbl else ""
     if item["kind"] == "lead":
