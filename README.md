@@ -62,6 +62,8 @@ AFD_DOOR_URL=https://<door> AFD_TOKEN_FILE=T AFD_OWNER_CHAT_USER=<id> python3 ow
 python3 owner/afd_owner.py receipts --verify            # door chain, owner chain, both sides agree
 ```
 
+Callers: send a real `User-Agent` header. Cloudflare in front of the hosted door returns HTTP 403 to requests without one (for example Python `urllib` defaults); curl and normal MCP clients are fine. A `check_request` answer is delivered once; don't expect the first-time message on a repeat check.
+
 Run a door for another business: copy `config/axiom.yaml`, point it at that business's facts page, set the owner, and write `config/policies/public.yaml`.
 
 ## More
