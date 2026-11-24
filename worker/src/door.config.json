@@ -1,0 +1,23 @@
+{
+  "door_id": "deployaxiom-front-door",
+  "owner": "percy",
+  "founder": "P. K. Stewart",
+  "booking_fact": "f04",
+  "timezone": "America/Chicago",
+  "policy": {
+    "allow": ["leave_lead"],
+    "ask_owner": ["request_call", "ask_question"],
+    "deny": []
+  },
+  "limits": {
+    "owner_messages_per_day": 10,
+    "max_pending_per_caller": 2,
+    "acts_per_hour_per_caller": 5,
+    "acts_per_hour_per_person": 5,
+    "acts_per_hour_per_ip": 10,
+    "pending_ttl_hours": 72,
+    "decline_days": 90,
+    "decline_similarity": 0.6,
+    "page_answer_min_score": 0.75
+  }
+}

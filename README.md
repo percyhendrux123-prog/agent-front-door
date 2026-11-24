@@ -19,7 +19,15 @@ Reading is always open: the business's facts come straight off its own facts pag
 
 **Fixed rule.** The door never runs on a machine that holds anything private. Run it on its own small box or container that holds only the public facts page and its own config.
 
-What this repo is not: it is a working prototype with tests and a demo. It does not host a door anywhere, and it sends no email or text, books nothing and takes no money. The demo uses fictional people only.
+**Hosted door (Cloudflare Workers Free).** `worker/` is the same door as one Cloudflare Worker plus one SQLite Durable Object, on the free plan only. Deploy Axiom runs it at `https://axiom-front-door.percyhendrux123.workers.dev/mcp`. Read tools answer from the bundled facts page; `request_call`, `ask_question` and `leave_lead` go through the same rules, and `check_request` collects the owner's answer.
+
+**The owner's machine is never opened to the internet.** The door never sends anything and never connects in. `owner/afd_owner.py` runs on the owner's machine and only connects out: every minute it pulls new questions from the door, sends each one to the owner's chat, reads the owner's typed `consent yes CODE` / `consent no CODE`, and pushes the answer back. The owner side is locked with a token whose hash is the only thing the Worker holds.
+
+**Caller words never reach a model.** A note is cut to 280 characters with links removed and shown only to the owner as "their words, unverified". The chat message is sent without a copy in any agent's session, and the owner is asked to type the answer as a new message so a quote never carries the words back in.
+
+**Caps.** At most 10 owner questions or leads a day across all callers; 2 open questions per caller; 5 acts an hour per caller and per person; 10 an hour per address; plus per-address and whole-door request limits at the edge. Over any free-plan limit the door fails closed; it never bills.
+
+What this repo is not: it sends no email or text to callers, books nothing and takes no money. A yes to a call request returns the booking link; the person picks the time. Tests and demos use fictional people only.
 
 ---
 
@@ -39,6 +47,19 @@ uv run afd owner-inbox              # owner: open questions
 uv run afd yes CODE                 # owner: approve
 uv run afd no CODE                  # owner: decline (remembered)
 uv run afd receipts --verify        # check the receipt chain
+```
+
+Hosted door and owner side (see [worker/DEPLOY.md](worker/DEPLOY.md)):
+
+```sh
+uv run python worker/build_facts.py                     # bundle the LIVE facts page (sha256 recorded)
+cd worker && npx wrangler deploy                        # Workers Free; one SQLite Durable Object
+python3 -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1]).read().strip().encode()).hexdigest())" TOKEN_FILE \
+  | npx wrangler secret put OWNER_TOKEN_SHA256           # only the token's hash goes to the Worker
+cd .. && uv run python worker/test/outside_client.py https://<door>/mcp        # read path from outside
+python3 worker/test/act_e2e.py http://127.0.0.1:8787 --token-file T --owner-sim --cap   # act path, local
+AFD_DOOR_URL=https://<door> AFD_TOKEN_FILE=T AFD_OWNER_CHAT_USER=<id> python3 owner/afd_owner.py poll
+python3 owner/afd_owner.py receipts --verify            # door chain, owner chain, both sides agree
 ```
 
 Run a door for another business: copy `config/axiom.yaml`, point it at that business's facts page, set the owner, and write `config/policies/public.yaml`.

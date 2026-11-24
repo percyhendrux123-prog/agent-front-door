@@ -1,6 +1,6 @@
 # Agent Front Door: spec
 
-Status: open-source prototype (MIT). Not hosted anywhere by this repo. Owner of every go-live decision: the business owner.
+Status: open source (MIT). Python prototype in `agent_front_door/`; hosted version for Cloudflare Workers Free in `worker/` with the owner side in `owner/` (see the Hosted door section). Owner of every go-live decision: the business owner.
 
 Fixed rule: the door never runs on a machine that holds anything private. Host it on its own small box or container that holds only the public facts page and its own deploy config.
 
@@ -61,7 +61,7 @@ Built on `hermes-consent-network` `core.py`, vendored as `agent_front_door/conse
 | ask type | the action: `request_call`, `ask_question`, `leave_lead` |
 | `allow` / `ask_owner` / `deny` | same; Axiom's `public.yaml`: allow `leave_lead`; ask owner `request_call`, `ask_question` |
 | hard floor `HARD_DENY` | same set plus `commitment` and `client_data`, triggered by the action or by words in the caller's text |
-| one question to owner | `OwnerChannel`; prototype writes `.state/owner_channel.jsonl`, production uses `hermes send -t telegram`. Owner replies `consent yes CODE` / `consent no CODE` (prototype: `afd yes CODE`) |
+| one question to owner | `OwnerChannel`; prototype writes `.state/owner_channel.jsonl`, hosted: the owner's machine pulls the question and sends it with Hermes `send` to the owner's chat, with the session mirror off. Owner replies `consent yes CODE` / `consent no CODE` (prototype: `afd yes CODE`) |
 | remembered no | `Declines`, keyed by caller agent + person, 90 days, similarity 0.6 |
 | `max_pending` | per caller (public: 2) |
 | receipts | `Receipts` hash chain in `.state/receipts.jsonl`; each answer returns `{seq, ts, ask_id, ask_type, decision, reason, text_sha256, prev, hash}` so the caller keeps its own chain; `compare_sides` cross-checks |
@@ -76,7 +76,7 @@ Identity is **self-reported** unless a partner key matches. Self-reported names 
 - Free text: notes capped at 280 characters; links, control characters and bidi overrides removed; labels limited to 64 plain characters. Caller text is never passed to any model, only stored for the owner and shown as "their words, unverified".
 - Floor words: price, payment, refund, deletion, sends to others, client data or credentials, commitments. A hit is refused before policy, for partners too, and the reply quotes the page (for price: "The scope, price, schedule and deliverables of each engagement are set in a written proposal, invoice or agreement.").
 - Fail closed: no `public.yaml` means strangers can do nothing.
-- Production adds (not in the prototype): per-IP caps at the edge (Netlify/Cloudflare), request size limit, partner keys issued and revoked by the owner, and an alert when the daily owner cap trips.
+- Hosted door adds: per-IP caps at the edge, a 16 KB request cap, 10 acts an hour per address. Not yet: partner keys (every hosted caller is self reported) and an alert when the daily owner cap trips.
 
 ### Open source
 
@@ -84,9 +84,29 @@ Identity is **self-reported** unless a partner key matches. Self-reported names 
 - Repo layout: `agent_front_door/` (door, facts, server, cli, vendored consent core), `config/` (one business), `tests/`, `demo/`.
 - To run a door for another business: copy `config/axiom.yaml`, point `facts_file` / `facts_url` at their facts page, set owner and booking link, write `policies/public.yaml`.
 - Upstream path: propose `consent_core.py` caller-identity fields back to hermes-consent-network so the two stay one codebase; reference issue NousResearch/hermes-agent#159584.
-- Not done here: publishing a package, hosting a door, or registering in an MCP directory.
+- Not done here: publishing a package or registering in an MCP directory.
 
 ### Proof
 
 - `uv run pytest -q`: unit tests plus one end-to-end test over a real stdio MCP connection.
 - `uv run python demo/run_demo.py` writes `demo/TRANSCRIPT.md`: three fictional callers (Claude partner, Gemini stranger, GPT stranger) walk read, allowed, owner-approved, owner-declined + remembered no, and hard-floor refused paths; both receipt chains verify and agree.
+
+### Hosted door (worker/ + owner/)
+
+```
+caller agent --MCP--> Cloudflare Worker (stateless) --RPC--> DoorState Durable Object (SQLite)
+                                                                ^            |
+owner's machine: afd_owner.py poll (every minute) --HTTPS out---+  pull / ack / answer / receipts
+        |  sends the question to the owner's chat (Hermes send, mirror off)
+        |  reads the owner's typed "consent yes|no CODE" from the local Hermes message store
+        +--> pushes the answer to the door
+```
+
+- Nothing connects in to the owner's machine. The Worker makes no outbound requests.
+- Owner endpoints (`/owner/pull`, `/owner/ack`, `/owner/answer`, `/owner/receipts`) need `Authorization: Bearer <token>`; the Worker holds only the token's sha256 (secret `OWNER_TOKEN_SHA256`). Without the secret the owner side stays closed.
+- Decision order is the prototype's: validate, rate caps (address 10/h, caller 5/h, person 5/h), hard floor, prior answer, policy, remembered no (90 days, similarity 0.6), open questions per caller (2), daily owner cap (10, questions and leads together, owner's time zone), then one question.
+- A yes to `request_call` returns exactly: "Recorded for Deploy Axiom. If the work fits, P. K. Stewart takes the call. To pick a time now: <booking link from the facts page>". A yes is carried out once; later checks return `already_done`.
+- Receipts: the door's chain lives in the Durable Object (`hash = sha256(prev + "\n" + canonical JSON)`); the caller gets its copy in every answer; `GET /receipts/head` shows the head publicly; the owner's machine keeps its own chain whose entries point at the door's receipt hashes, and `afd_owner.py receipts --verify` checks both chains and that they agree.
+- Owner chat answers are accepted only from the configured owner user id on the configured platform, only for codes this machine sent, and only from a line that is the whole answer (so a quoted message cannot answer).
+- Caller words are kept for the decline memory window (90 days), then cleared.
+- Tests: `worker/test/act_e2e.py` (fictional callers: waiting, yes, no, remembered no, floor, page answer, lead, daily cap, both receipt chains), `worker/test/outside_client.py` (read path against the live page, from outside).

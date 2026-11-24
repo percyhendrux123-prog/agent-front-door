@@ -1,0 +1,227 @@
+{
+ "business": "Deploy Axiom",
+ "source": "https://deployaxiom.com/facts/",
+ "page_sha256": "ad702912730bc2a504c6268ab05c4940d1be64677d9bceaafb65ad5f4645c261",
+ "page_bytes": 13486,
+ "title": "Deploy Axiom: the facts",
+ "summary": "Deploy Axiom builds and runs AI agents for owner-led firms: insurance agencies, law offices, financial advisors and CPAs, real estate teams, medical and dental practices, coaches and founders’ offices. Based in Baton Rouge, Louisiana. Founder: P. K. Stewart. Updated November 24, 2026.",
+ "facts": [
+  {
+   "id": "f01",
+   "question": "What is Deploy Axiom?",
+   "answer": "Deploy Axiom is an AI operations firm in Baton Rouge, Louisiana. It builds and runs AI agents that handle a business's client care, follow-up and records. The company is Deploy Axiom LLC, and its founder is P. K. Stewart.",
+   "links": []
+  },
+  {
+   "id": "f02",
+   "question": "Where is Deploy Axiom?",
+   "answer": "Deploy Axiom is based in Baton Rouge, Louisiana.",
+   "links": []
+  },
+  {
+   "id": "f03",
+   "question": "Who is it for?",
+   "answer": "Owner-led firms where everything waits on the owner. The job changes by field; anything that sends, spends or commits the business still waits for the owner's yes. Examples:\n- Insurance agencies: client care after a policy issues, with a birthday note where there is a date, then regular check-ins by text and email through the first year, each one checked before it goes for opt-out, the client's own local hours and the wording the owner approved (the field report).\n- Law offices: the attorney's calendar and deadlines kept straight, and routine letters and record requests drafted for review before they go.\n- Financial advisors and CPAs: client review meetings scheduled on their cycle, open paperwork tracked, and the follow-up after each meeting drafted.\n- Real estate teams: past-client care after closing, with anniversary notes, check-ins and review requests at set points and the client records kept current.\n- Medical and dental practices: appointment changes, reminders and patient callbacks drafted from the practice's own systems for its staff to approve.\n- Coaches and fitness studios: member follow-up, with check-ins, renewals and the members who have gone quiet, each message written in the owner's words.\n- Founders' offices: calendar, inbox triage, meeting prep and the follow-ups that come out of each meeting.\nBaton Rouge businesses that miss calls: an AI receptionist answers, says it is an AI, takes the details and gives the caller a next step.",
+   "links": [
+    "https://deployaxiom.com/baton-rouge/",
+    "https://deployaxiom.com/field-reports/insurance-client-care/"
+   ]
+  },
+  {
+   "id": "f04",
+   "question": "How do I book Deploy Axiom?",
+   "answer": "Book a 15-minute call on the booking page, write a short brief on the homepage, or email percy@deployaxiom.com. An AI agent reads every brief first and replies the way you ask. If the work fits, P. K. Stewart takes the call.",
+   "links": [
+    "https://calendar.app.google/rD42RF3YVLaRV52J6",
+    "https://deployaxiom.com/#contact",
+    "mailto:percy@deployaxiom.com"
+   ]
+  },
+  {
+   "id": "f05",
+   "question": "What do the agents do?",
+   "answer": "They read, sort, draft, edit and check the result. Typical work: client-care texts and email at set points after a sale, with quiet hours, opt-outs and no repeats; answering missed calls; checking new messages and drafting replies in the owner's words; writing every job to a record.",
+   "links": []
+  },
+  {
+   "id": "f06",
+   "question": "What do the agents not do on their own?",
+   "answer": "Anything that sends, publishes, spends or alters a customer record is prepared in full, then held for the owner's yes. Moving money, setting prices and making commitments in the owner's name stay with the owner. An agent never completes a payment.",
+   "links": []
+  },
+  {
+   "id": "f07",
+   "question": "Where do the agents run?",
+   "answer": "On the owner's own computer and accounts, not Deploy Axiom's. The AI models the agents call process each task under the model providers' terms.",
+   "links": []
+  },
+  {
+   "id": "f08",
+   "question": "Does Deploy Axiom handle HIPAA compliance?",
+   "answer": "We work in fields where HIPAA applies. Your compliance stays with you and your systems; if you need help there, we'll point you to people who specialize in it.",
+   "links": []
+  },
+  {
+   "id": "f09",
+   "question": "What has Deploy Axiom built?",
+   "answer": "Client care for an independent insurance agency, live since October 29, 2026: read the field report, including what is not proven yet. Public code for technical reviewers: six plugins accepted into the Hermes Agent plugin catalog (see the plugins). Deploy Axiom runs its own two companies the same way, with sixteen specialist AI agents behind one front door (as of November 9, 2026).",
+   "links": [
+    "https://deployaxiom.com/field-reports/insurance-client-care/",
+    "https://deployaxiom.com/plugins/"
+   ]
+  },
+  {
+   "id": "f10",
+   "question": "How is a project priced?",
+   "answer": "The scope, price, schedule and deliverables of each engagement are set in a written proposal, invoice or agreement. See the terms.",
+   "links": [
+    "https://deployaxiom.com/terms/"
+   ]
+  },
+  {
+   "id": "f11",
+   "question": "Can an AI agent read these facts?",
+   "answer": "For AI agents: an MCP server at https://axiom-front-door.percyhendrux123.workers.dev/mcp answers from https://deployaxiom.com/facts/, word for word. It can also pass a call request or a question to P. K. Stewart, who answers each one yes or no.",
+   "links": [
+    "https://axiom-front-door.percyhendrux123.workers.dev/mcp",
+    "https://deployaxiom.com/facts/"
+   ]
+  },
+  {
+   "id": "f12",
+   "question": "Where else is Deploy Axiom?",
+   "answer": "- LinkedIn: Deploy Axiom\n- Instagram: @deployaxiom\n- YouTube: P. K. Stewart | Axiom\n- GitHub: P. K. Stewart\n- X: @OfficialPercyK\n- Instagram, P. K. Stewart: @officialpercyk",
+   "links": [
+    "https://github.com/percyhendrux123-prog",
+    "https://www.instagram.com/deployaxiom/",
+    "https://www.instagram.com/officialpercyk/",
+    "https://www.linkedin.com/company/deployaxiom",
+    "https://www.youtube.com/channel/UCots8lkRMWPoUCU4LYwDaRQ",
+    "https://x.com/OfficialPercyK"
+   ]
+  }
+ ],
+ "stop": [
+  "a",
+  "about",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "axiom",
+  "be",
+  "by",
+  "can",
+  "deploy",
+  "do",
+  "does",
+  "for",
+  "from",
+  "how",
+  "i",
+  "in",
+  "is",
+  "it",
+  "its",
+  "me",
+  "my",
+  "of",
+  "on",
+  "or",
+  "our",
+  "the",
+  "their",
+  "there",
+  "they",
+  "this",
+  "to",
+  "us",
+  "we",
+  "what",
+  "when",
+  "where",
+  "which",
+  "who",
+  "why",
+  "will",
+  "with",
+  "you",
+  "your"
+ ],
+ "syn": {
+  "cost": "priced",
+  "costs": "priced",
+  "price": "priced",
+  "prices": "priced",
+  "pricing": "priced",
+  "fee": "priced",
+  "fees": "priced",
+  "much": "priced",
+  "charge": "priced",
+  "located": "where",
+  "location": "where",
+  "based": "where",
+  "office": "where",
+  "city": "where",
+  "founder": "what",
+  "owns": "what",
+  "company": "what",
+  "schedule": "book",
+  "call": "book",
+  "contact": "book",
+  "hire": "book",
+  "start": "book",
+  "email": "book",
+  "hipaa": "hipaa",
+  "compliance": "hipaa",
+  "compliant": "hipaa",
+  "industries": "for",
+  "who": "for",
+  "dentists": "dental",
+  "lawyers": "law",
+  "attorneys": "law",
+  "clients": "for",
+  "serve": "for",
+  "customers": "for",
+  "approve": "not",
+  "approval": "not",
+  "own": "not",
+  "host": "run",
+  "hosted": "run",
+  "data": "run",
+  "cloud": "run",
+  "live": "run",
+  "computer": "run",
+  "built": "built",
+  "proof": "built",
+  "examples": "built",
+  "case": "built",
+  "linkedin": "else",
+  "instagram": "else",
+  "social": "else",
+  "youtube": "else",
+  "github": "else"
+ },
+ "floor_reply": {
+  "price": "f10",
+  "pricing": "f10",
+  "money": "f10",
+  "payment": "f06",
+  "refund": "f06",
+  "delete_data": null,
+  "send_third_party": "f06",
+  "commitment": "f06",
+  "client_data": "f07"
+ },
+ "floor_label": {
+  "price": "prices",
+  "payment": "payments",
+  "refund": "refunds",
+  "delete_data": "deletion requests",
+  "send_third_party": "messages to anyone else",
+  "commitment": "commitments in the owner's name",
+  "client_data": "requests for client data or credentials"
+ },
+ "note_max": 280
+}

@@ -6,3 +6,5 @@ demo/state/
 demo/state-client/
 local-notes/
 .pytest_cache/
+.dev.vars
+.wrangler/

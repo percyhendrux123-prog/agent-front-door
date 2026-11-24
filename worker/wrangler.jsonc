@@ -1,0 +1,23 @@
+{
+  // Agent front door. Workers Free plan only, no paid add-ons.
+  // State: one SQLite-backed Durable Object (the only Durable Object kind the Free plan allows).
+  //   Free limits (developers.cloudflare.com/durable-objects/platform/pricing, read 2026-11-24):
+  //   100,000 requests/day, 13,000 GB-s/day, 5 million rows read/day, 100,000 rows written/day,
+  //   5 GB stored. Over any limit, operations fail with an error; the Free plan does not bill.
+  // Secret: OWNER_TOKEN_SHA256 (sha256 of the owner's pull token; the token itself never leaves the owner's machine).
+  // The door makes no outbound requests: the owner's machine pulls questions and pushes answers.
+  // Over the Workers Free 100,000 requests/day Cloudflare returns error 1027 instead of billing.
+  "name": "axiom-front-door",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "durable_objects": { "bindings": [ { "name": "DOOR", "class_name": "DoorState" } ] },
+  "migrations": [ { "tag": "v1", "new_sqlite_classes": ["DoorState"] } ],
+  "ratelimits": [
+    { "name": "PER_IP", "namespace_id": "61301", "simple": { "limit": 30, "period": 60 } },
+    { "name": "WHOLE_DOOR", "namespace_id": "61302", "simple": { "limit": 600, "period": 60 } }
+  ]
+}
